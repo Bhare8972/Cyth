@@ -1,0 +1,19 @@
+cmake_minimum_required(VERSION 3.3)
+
+project("CSU_unit_tests")
+set(utils ../utilities)
+
+include_directories ("${utils}")
+
+SET(CMAKE_CXX_FLAGS "-std=c++0x -fmax-errors=10 -Wall")
+
+set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}")
+
+set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}")
+
+
+add_executable(CSU_unit_tests
+              ./UTF8_test.cpp
+              ${utils}/UTF8.cpp)
+              
+          
