@@ -15,7 +15,9 @@ set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}")
 add_executable(CSU_unit_tests
               ./main.cpp
               ./UTF8_test.cpp
-              ./type_erasure_test
+              ./type_erasure_test.cpp
+              ./lexer_test.cpp
+              ${utils}/lexer.cpp
               ${utils}/UTF8.cpp)
               
           
