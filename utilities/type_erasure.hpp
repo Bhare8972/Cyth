@@ -21,7 +21,6 @@ Inspired by any.cpp by Christipher Diggins.
 #include <memory>
 #include <exception>
 #include <list>
-//#include <initializer_list>
 #include <type_traits>
 #include <tuple>
 
@@ -189,7 +188,7 @@ public:
         return data==0;
     }
 
-    void rest()
+    void reset()
     {
         data=0;
         type_information=get_policy<empty_holder>();
@@ -219,7 +218,7 @@ class type_holder
 {
 public:
 };
-//special structs used to unwrap function arguments
+
 template<typename first_type, typename ... following_types>
 class type_holder<first_type, following_types...> : type_holder<following_types...>
 //this struct is simple for keeping a hold of multiple types
@@ -228,7 +227,7 @@ public:
     type_holder<following_types ...> get_following() {  return type_holder<following_types...>();}
 };
 
-
+//special structs for unwraping function arguments
 template<int N>
 struct apply_wrap
 {
@@ -285,6 +284,21 @@ struct apply_wrap<0>
     }
 };
 
+
+//two extra functions to turn a template pack into a list of dyn_holders
+template<typename first_argument_type, typename ... argument_types>
+void varargs_to_list(std::list<dyn_holder>& out_list, first_argument_type first_argument, argument_types...arguments)
+{
+    out_list.push_back(dyn_holder(first_argument));
+    varargs_to_list(out_list, arguments...);
+}
+
+template<typename first_argument_type>
+void varargs_to_list(std::list<dyn_holder>& out_list, first_argument_type first_argument)
+{
+    out_list.push_back(dyn_holder(first_argument));
+}
+
 class dyn_method : public dyn_holder
 //this class expands upon dyn_holder, by adding a callible method
 {
@@ -303,21 +317,6 @@ protected:
         }
 
         virtual ~method_policy(){}
-
-        //virtual dyn_holder call_func(void* cls) //call function with zero arguments
-        //{
-            //if(sizeof...(argsT) ==0)
-            //{
-                //classT* A=static_cast<classT*>(cls);
-                //retT R=(A->*func)();
-                //return dyn_holder(R);
-                //return call_deravel_zero(cls);
-            //}
-            //else
-            //{
-                //throw wrong_num_args();
-            //}
-        //}
 
         virtual dyn_holder call_func(void* cls) //call function with zero arguments
         {
@@ -376,109 +375,6 @@ protected:
             return apply_wrap<sizeof...(argsT)>::deravel(cls, func, t, arguments.begin(), arguments.end());
         }
 
-
-
-        //template<typename ... extra_args>   //called for zero argumetns
-        //dyn_holder call_deravel(void* cls, std::initializer_list<dyn_holder>::iterator next_argument,  std::initializer_list<dyn_holder>::iterator END_arguments)
-        //{ //called on zero arguments?
-            //if(next_argument!=END_arguments) throw wrong_num_args();
-              //
-            //classT* A=static_cast<classT*>(cls);
-            //retT R=(A->*func)();
-            //return dyn_holder(R);
-        //}
-
-        //template<typename unravedT, typename... to_unravelT> //begin unraveling
-        //dyn_holder call_deravel(void* cls, std::initializer_list<dyn_holder>::iterator next_argument,  std::initializer_list<dyn_holder>::iterator END_arguments)
-        //{
-            //if(next_argument==END_arguments) throw wrong_num_args();
-            //
-            //unravedT new_arg;
-            //next_argument->cast(new_arg);
-            //++next_argument;
-            //
-            //return call_deravel<to_unravelT..., unravedT>(cls, new_arg, next_argument, END_arguments);
-        //}
-
-        //template<typename=void, typename unraveldT>//should take care of one argument already unraveld
-        //dyn_holder call_deravel(void* cls, unraveldT unrav, std::initializer_list<dyn_holder>::iterator next_argument,  std::initializer_list<dyn_holder>::iterator END_arguments)
-        //{
-            //if(next_argument != END_arguments) throw wrong_num_args(); //given too many arguments
-            //
-            //classT* A=static_cast<classT*>(cls);
-            //retT R=(A->*func)(unrav);
-            //return dyn_holder(R);
-        //}
-
-        //dyn_holder call_deravel(void* cls, argsT...deravel_args, std::initializer_list<dyn_holder>::iterator next_argument,  std::initializer_list<dyn_holder>::iterator END_arguments)
-        //{
-            //if(next_argument != END_arguments) throw wrong_num_args(); //given too many arguments
-            //
-            //classT* A=static_cast<classT*>(cls);
-            //retT R=(A->*func)(deravel_args...);
-            //return dyn_holder(R);
-        //}
-
-        //template<typename ... args_to_unraveld, typename ... args_have_unraveld>
-        //dyn_holder call_deravel(void* cls, args_have_unraveld... deravel_args, std::initializer_list<dyn_holder>::iterator next_argument,  std::initializer_list<dyn_holder>::iterator END_arguments)
-        //{
-            //if(next_argument != END_arguments) throw wrong_num_args(); //given too many arguments
-            //
-            //classT* A=static_cast<classT*>(cls);
-            //retT R=(A->*func)(deravel_args...);
-            //return dyn_holder(R);
-        //}
-
-//        template<int i, typename... args_have_unraveld> //end of unraveling
-//        dyn_holder call_deravel(void* cls, args_have_unraveld... deravel_args, std::initializer_list<dyn_holder>::iterator next_argument,  std::initializer_list<dyn_holder>::iterator END_arguments)
-//        {
-//            if(next_argument != END_arguments) throw wrong_num_args(); //given too many arguments
-//
-//            classT* A=static_cast<classT*>(cls);
-//            retT R=(A->*func)(deravel_args...);
-//            return dyn_holder(R);
-//        }
-//
-//        template<typename unravedT, typename... to_unravelT, int i, typename... args_have_unraveld> //middle or end of unraveling
-//        dyn_holder call_deravel(void* cls, args_have_unraveld...deravel_args, std::initializer_list<dyn_holder>::iterator next_argument,  std::initializer_list<dyn_holder>::iterator END_arguments)
-//        {
-//            if(next_argument==END_arguments) throw wrong_num_args();
-//
-//            unravedT new_arg;
-//            next_argument->cast(new_arg);
-//            ++next_argument;
-//
-//            //if(sizeof...(to_unravelT)==0 and (sizeof...(args_have_unraveld)+1)==sizeof...(argsT) ) //what if one of these is true, but not the other?
-//            //{//we have finished unraveling
-//                //if(next_argument != END_arguments) throw wrong_num_args(); //given too many arguments
-//                //
-//                //classT* A=static_cast<classT*>(cls);
-//                //retT R=(A->*func)(deravel_args..., new_arg);
-//                //return dyn_holder(R);
-//            //}
-//            //else
-//            //{
-//    return call_deravel<to_unravelT..., 0, deravel_args, new_arg>(cls, deravel_args..., new_arg, next_argument, END_arguments);
-//            //}
-//        }
-
-
-        //template<typename unravedT, typename... argsT2> //end of unraveling
-        //dyn_holder call_deravel(void* cls, argsT2...deravel_args, std::initializer_list<dyn_holder>::iterator next_argument,  std::initializer_list<dyn_holder>::iterator END_arguments)
-        //{
-            //if(next_argument==END_arguments) throw wrong_num_args();
-            //
-            //unravedT new_arg;
-            //next_argument->cast(new_arg);
-            //++next_argument;
-            //
-            //if(next_argument != END_arguments) throw wrong_num_args();
-            //
-            //classT* A=static_cast<classT*>(cls);
-            //retT R=(A->*func)(deraval_args_start, deravel_args..., new_arg);
-            //return dyn_holder(R);
-        //}
-
         virtual base_policy* get_policy() //we need this to be able to maintain consistancy with dyn_holder
         {
             return dyn_holder::get_policy<classT>();
@@ -513,6 +409,12 @@ public:
         return type_information->call_func(data.get());
     }
 
+    template<typename argument_type>
+    dyn_holder operator()(argument_type argument) //call method with one argument
+    {
+        return type_information->call_func(data.get(), dyn_holder(argument));
+    }
+
     dyn_holder operator()(dyn_holder argument) //call method with one argument
     {
         return type_information->call_func(data.get(), argument);
@@ -523,6 +425,21 @@ public:
         return type_information->call_func(data.get(), arguments);
     }
 
+    template<typename...argument_types>
+    dyn_holder operator()(argument_types...args) //call method with multiple arguments
+    //a special function to pack arguments into a list
+    {
+        std::list<dyn_holder> arguments;
+        varargs_to_list(arguments, args...);
+        return type_information->call_func(data.get(), arguments);
+    }
+
 };
 
+/* where to go from here:
+combine dyn_holder and dyn_method 
+* extend dyn_method to work with non-method functions, and with functions and methods that don't have return types
+* extend both of them to support basic operators. (or error otherwise, using enable_if)
+* create a new, extended, type that holds a dictionary to multiple methods, creating a python-like type that can hold C++ classes
+*/
 }//end namespace
