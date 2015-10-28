@@ -1,1 +1,42 @@
-When I get bored, I will describe the Cyth languege in this file
+When I get bored, I will describe the Cyth languege in this file.
+This is going to be continuous notes and stream-of-thought.  More organized description (with correct spelling) needs to be done elsewhere.
+
+Cyth will be a statically typed languege with a dynamic type.
+EG: variable declarations look similar to C:
+
+int v=5
+float a
+a=6
+ect...
+
+Cyth built-in numeric types will be int, long, float, and double.  It is presently undecided how big int and long should be.
+These numeric types will support the standard mathematical operators:  +, - (unary and binary), *, /, %, ^ (power)
+
+Cyth will suport standard update operators, all of which are statements, not expressions:
+v+=1
+v*=9
+a/=3
+
+ect, for +,-,*,/,%, ^
+
+Cyth will also have increment and decrement:
+
+a++
+v--
+
+but these are PURELY statements, they do not return any values.
+
+Cyth will also have a dynamic type, called 'var':
+
+var b=5  #b holds a float. 
+b="hi!"  #how holds a string
+var c    #c is empty, or holds 'none'
+
+in Cyth, the dynamic type will be prefered over a static type, unless there is good reason to use the static type.
+To facilitate this, there will be a new declaration operator ' := '
+
+ b := 5  # equivalent to var b=5
+ 
+ as an aside, Cyth will have two kinds of commenting:  # will comment out the rest of the line
+  #*  will comment untill a *#
+
