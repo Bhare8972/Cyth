@@ -36,6 +36,7 @@ namespace csu{ //cyth standard utilities namespace
 
 //basic utility classes
 
+class location_span;
 class location
 //location class, to track a location in a file
 {
@@ -52,7 +53,7 @@ class location
     location& operator=(const location& other) ;
     //assignment
     
-    void update(utf8_string& input);
+    location_span update(utf8_string& input); //this needs to be updated
 };
 std::ostream& operator<<(std::ostream& os, const location& dt);
 
@@ -111,7 +112,7 @@ public:
     //load data from the input file
     
     code_point next();
-    //return next charector with 'reading' it
+    //return next charector withott 'reading' it
     
     code_point read();
     //read the next charector and return it
@@ -138,10 +139,27 @@ public:
 template<typename return_type>
 class lexing_functor
 //a class to overload in order to return data from lexer. If not subclassed, it will just return an empty return_type
-//nice thing, is that this is just one pointer! nice and light
+//still a  fairly light class
 {
 public:
-    virtual return_type operator()(utf8_string& data, location_span& loc )
+    bool return_data;
+    lexing_functor()
+    {
+        return_data=true;
+    }
+    
+    lexing_functor(bool _return_data)
+    {
+        return_data=_return_data;
+    }
+
+    virtual return_type operator()(const utf8_string& data, const location_span& loc, bool& _return_data)
+    {
+        _return_data=return_data;
+        return *this(data, loc);
+    }
+    
+    virtual return_type operator (const utf8_string& data, const location_span& loc)
     {
         return return_type();
     }
@@ -159,6 +177,7 @@ public:
     stl_functional(std::function<return_type (utf8_string&, location_span&)> _func)
     {
         func=_func;
+        return_data=true;
     }
 
     virtual return_type operator()(utf8_string& data, location_span& loc )
@@ -172,20 +191,102 @@ class lexer
 // a class to lex files
 {
 private:
+
+    //the lexing table info
     lexing_functor<return_type> EOF_action; 
     std::shared_ptr< std::vector< std::shared_ptr<DFA_state> > > state_table;
     std::shared_ptr< std::vector< lexing_functor<return_type> > > actions; 
     std::shared_ptr< std::vector< unsigned int> > lexer_states;
+    
+    //input
+    std::shared_ptr< ring_buffer > input_buffer;
+    
+    //state
+    unsigned int lexer_state;
 
 public:
+    location loc();
+
     lexer(lexing_functor<return_type> _EOF_action, std::shared_ptr< std::vector< std::shared_ptr<DFA_state> > > _state_table, 
                 std::shared_ptr< std::vector< lexing_functor<return_type> > > _actions, std::shared_ptr< std::vector< unsigned int> > _lexer_states)
     {
+        lexer_state=0;
         EOF_action=_EOF_action;
         actions=_actions;
         lexer_states=_lexer_states;
-        //I AM HERE
-        //making lexer
+        input_buffer=new ring_buffer(std::cin);
+    }
+    
+    //functions to control buffer
+    void set_input(utf8_string& file_name)
+    {
+        ifstream fin(file_name.to_cpp_string());
+        input_buffer=new ring_buffer(fin);
+        loc=location();
+    }
+    
+    void unput(utf8_string& data)
+    {
+        input_buffer->insert(data);
+    }
+    
+    //lexing functions
+    void set_state(unsigned int _new_state)
+    {
+        lexer_state=_new_state;
+    }
+    
+    return_type operator()()
+    //lex and eat patterns untill the _return_data flag for an action is true, in which case, run the function and return the data
+    {
+        while(true)
+        {
+            unsigned int initial_DFA_index=(*lexer_states)[lexer_state];
+            unsigned int DFA_state_index=0;
+            
+            auto DFA_state=(*state_table)[DFA_state_index+initial_DFA_index];
+            unsigned int last_action_index=0;//note that this is illegitamate untill has_read_accepting_state is true
+            bool has_read_accepting_state=false;
+            
+            while(not input_buffer->has_read_EOF)
+            {
+                if(DFA_state->accepting_info != -1)
+                {
+                    has_read_accepting_state=true;
+                    last_action_index=DFA_state->accepting_info;
+                }
+                
+                int new_state=state->get_transition( input_buffer->read() );
+                if(new_state==-1) break; //no transition
+                
+                DFA_state_index=new_state;
+                DFA_state=(*state_table)[DFA_state_index+initial_DFA_index];
+            }
+            
+            if( has_read_accepting_state )
+            {
+                bool return_data=true;
+                utf8_string data=input_buffer->reset_string();
+                location_span span=loc.update(data);
+                auto ret_data=(*actions)[last_action_index](data, span, return_data);
+                if(return_data)
+                {
+                    return ret_data;
+                }
+                I AM HERE
+                DO NOT FORGET TO FIX location.update
+            }
+            else if(input_buffer->has_read_EOF)
+            {
+                EOF!
+            }
+            else
+            {
+                NO ACCEPTING STATE!
+                LEXING ERROR!
+            }
+        }
+        
     }
 }
 
@@ -237,7 +338,18 @@ public:
         EOF_action=_action;
     }
     
-    void add_pattern(utf8_string _regular_exp, lexing_functor<return_type> _action)
+    void add_nonreturn_pattern(utf8_string _regular_exp)
+    //add a regex pattern, where the lexer will just eat the pattern and keep parsing.
+    {
+        pattern new_pattern;
+        new_pattern.regular_expression=_regular_exp;
+        new_pattern.action_number=actions.size();
+        new_pattern.state=current_state;
+        patterns.push_back(new_pattern);
+        actions->push_back(lexing_functor<return_type>(false));
+    }
+    
+    void add_pattern(utf8_string _regular_exp, lexing_functor<return_type> _action=lexing_functor<return_type>())
     //add a regex pattern, and an associated action to take.
     {
         pattern new_pattern;
@@ -259,7 +371,7 @@ public:
         actions->push_back( stl_functional<return_type>(_action) );
     }
     
-    void add_multi_patterns(std::initializer_list<utf8_string> reg_expressions, lexing_functor<return_type> _action)
+    void add_multi_patterns(std::initializer_list<utf8_string> reg_expressions, lexing_functor<return_type> _action=lexing_functor<return_type>())
     {
         unsigned int action_number=actions.size();
         actions->push_back(_action);
