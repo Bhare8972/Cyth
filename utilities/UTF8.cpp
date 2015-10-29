@@ -48,44 +48,62 @@ code_point::code_point( const uint32_t _UTF32)
 {
     auto UTF32=_UTF32;
     code_units=0;
-    
+
     unsigned short bytesToWrite = 0;
     const uint32_t byteMask = 0xBF;
     const uint32_t byteMark = 0x80;
-    
+
     //get number of code units
-    if(UTF32 < 0x80) 
-    {	     
+    if(UTF32 < 0x80)
+    {
         bytesToWrite = 1;
-    } 
-    else if (UTF32 < 0x800) 
-    {     
+    }
+    else if (UTF32 < 0x800)
+    {
         bytesToWrite = 2;
-    } 
-    else if (UTF32 < 0x10000) 
-    {   
+    }
+    else if (UTF32 < 0x10000)
+    {
         bytesToWrite = 3;
-    } 
-    else if (UTF32 <= 0x200000) 
-    {  
+    }
+    else if (UTF32 <= 0x200000)
+    {
         bytesToWrite = 4;
-    } 
-    else 
+    }
+    else
     {
         throw gen_exception("32 bit number is too large to convert to UTF 8");
         return;
     }
     code_units=new uint8_t[bytesToWrite];
-    
+
     uint8_t* target=code_units + bytesToWrite;
-    
+
     //insert data into the UTF-8 code units
-    switch (bytesToWrite) 
+    switch (bytesToWrite)
     { /* note: everything falls through. */
         case 4: *(--target) = static_cast<uint8_t>((UTF32 | byteMark) & byteMask); UTF32 >>= 6;
         case 3: *(--target) = static_cast<uint8_t>((UTF32 | byteMark) & byteMask); UTF32 >>= 6;
         case 2: *(--target) = static_cast<uint8_t>((UTF32 | byteMark) & byteMask); UTF32 >>= 6;
         case 1: *(--target) = static_cast<uint8_t> (UTF32 | firstByteMark[bytesToWrite-1]);
+    }
+}
+
+code_point::code_point(std::istream& input_stream)
+{
+    code_units=0;
+
+    uint8_t first_char;
+    first_char=input_stream.get();
+    int NUNITS=NUnits(first_char);
+    code_units=new uint8_t[NUNITS];
+    code_units[0]=first_char;
+    int a=1;
+    switch(NUNITS)
+    {
+        case 4: code_units[a]=input_stream.get(); a++;
+        case 3: code_units[a]=input_stream.get(); a++;
+        case 2: code_units[a]=input_stream.get(); a++;
     }
 }
 
@@ -129,9 +147,9 @@ bool code_point::operator== (const utf8_string& rhs) const
     {
         return false;
     }
-    
+
     const code_point& rhs_pnt=rhs[0];
-    
+
     int l=NUnits();
     if(l==rhs_pnt.NUnits())
     {
@@ -145,29 +163,29 @@ bool code_point::operator== (const utf8_string& rhs) const
     return false;
 }
 
-code_point& code_point::operator=(const code_point& other) 
+code_point& code_point::operator=(const code_point& other)
 // copy assignment
 {
     if (this != &other) // self-assignment check expected
-    { 
+    {
         int l=other.NUnits();
         if (NUnits() != l)/* storage cannot be reused (e.g. different sizes) */
-        { 
+        {
             if(code_units)
-                delete[] code_units;     
-            code_units = new uint8_t[l]; 
+                delete[] code_units;
+            code_units = new uint8_t[l];
         }
-        
+
         for( int i=0; i<l; i++ )
         {
             code_units[i]=other[i];
         }
-        
+
     }
     return *this;
 }
 
-code_point& code_point::operator=(code_point&& other) 
+code_point& code_point::operator=(code_point&& other)
 // move assignment
 {
     if(code_units)
@@ -177,14 +195,14 @@ code_point& code_point::operator=(code_point&& other)
     return *this;
 }
 
-const uint8_t code_point::operator[](uint8_t idx) const 
+const uint8_t code_point::operator[](uint8_t idx) const
 //accsess a code-point in the code-unit. throws a gen_exception if idx is out of range
-{ 
+{
     if(idx>NUnits())
     {
         throw gen_exception("index out of range");
     }
-    return code_units[idx]; 
+    return code_units[idx];
 }
 
 int code_point::from_str(std::string input)
@@ -219,7 +237,7 @@ int code_point::NUnits() const
         return 3;
     else if( code_units[0]>=0xF0 and code_units[0]<=0xF4)
         return 4;
-        
+
     return 4;
 }
 
@@ -234,7 +252,7 @@ int code_point::NUnits(uint8_t start_char)
         return 3;
     else if( start_char>=0xF0 and start_char<=0xF4)
         return 4;
-            
+
     return 4;
 }
 
@@ -259,7 +277,7 @@ uint32_t code_point::to_UTF32() const
     int N_units=NUnits();
     uint8_t* source=code_units;
     //all cases fall through, on purpose.
-    switch(N_units) 
+    switch(N_units)
     {
         case 4: ret += *source++; ret <<= 6;
         case 3: ret += *source++; ret <<= 6;
@@ -290,7 +308,7 @@ std::istream& csu::operator>>(std::istream& is, code_point& dt)
         delete[] dt.code_units;
         dt.code_units=0;
     }
-    
+
     uint8_t first_char;
     is>>first_char;
     int NUNITS=dt.NUnits(first_char);
@@ -310,12 +328,12 @@ bool csu::operator<(const code_point& lhs, const code_point& rhs)
 {
     uint8_t lhs_l=lhs.NUnits();
     uint8_t rhs_l=rhs.NUnits();
-    
+
     if(lhs_l<rhs_l)
         return true;
     else if(lhs_l>rhs_l)
         return false;
-        
+
     for(uint8_t i=0; i<lhs_l; i++)
     {
         if(lhs.code_units[i]<rhs.code_units[i])
@@ -334,12 +352,12 @@ bool csu::operator>(const code_point& lhs, const code_point& rhs)
 {
     uint8_t lhs_l=lhs.NUnits();
     uint8_t rhs_l=rhs.NUnits();
-    
+
     if(lhs_l<rhs_l)
         return false;
     else if(lhs_l>rhs_l)
         return true;
-        
+
     for(uint8_t i=0; i<lhs_l; i++)
     {
         if(lhs.code_units[i]<rhs.code_units[i])
@@ -363,7 +381,7 @@ utf8_string::utf8_string(const utf8_string& RHS)
     length=RHS.length;
     capacity=RHS.length;
     points=new code_point[RHS.length];
-    
+
     for( int i=0; i<RHS.length; i++ )
     {
         points[i]=RHS[i];
@@ -419,12 +437,12 @@ void utf8_string::from_cpp_string(const std::string& input)
         position+=NUnits;
         new_length+=1;
     }
-    
+
     reserve(new_length);
     length=new_length;
-    
+
     position=0;
-    
+
     for(uint8_t i=0; i<length and position<input.length(); i++)
     {
         position+=points[i].from_str(input.substr(position));
@@ -439,21 +457,21 @@ std::string utf8_string::to_cpp_string()
     {
         cpp_length+=points[i].NUnits();
     }
-    
+
     std::string ret(cpp_length, ' ');
-    
+
     uint8_t position=0;
     for(uint8_t i=0; i<length; i++)
     {
         uint8_t NUnits=points[i].NUnits();
-        
-        switch (NUnits) 
-        { 
+
+        switch (NUnits)
+        {
             case 4:
             {
                 ret[position+3]=points[i][3];
             }
-            case 3: 
+            case 3:
             {
                 ret[position+2]=points[i][2];
             }
@@ -487,12 +505,12 @@ void utf8_string::resize(uint8_t _capacity)
 {
     if(_capacity==capacity)
         return;
-        
+
     code_point* new_points=new code_point[_capacity];
     uint8_t L=_capacity;
     if(length<_capacity)
         L=length;
-        
+
     for(uint8_t i=0; i<L; i++)
     {
         new_points[i]=points[i];
@@ -509,9 +527,9 @@ void utf8_string::reserve(uint8_t _capacity)
 {
     if(_capacity<=capacity)
         return;
-        
+
     code_point* new_points=new code_point[_capacity];
-        
+
     for(uint8_t i=0; i<length; i++)
     {
         new_points[i]=points[i];
@@ -543,7 +561,7 @@ utf8_string utf8_string::slice(uint8_t start, uint8_t stop)
     {
         throw gen_exception("stop is beyond length of string");
     }
-        
+
     uint8_t L=stop-start;
     utf8_string ret(L);
     for(uint8_t i=start; i<stop; i++)
@@ -553,7 +571,7 @@ utf8_string utf8_string::slice(uint8_t start, uint8_t stop)
     return ret;
 }
 
- 
+
 const code_point& utf8_string::operator[] (size_t pos) const
 //accsess code_point at pos. Throws gen_exception if pos is beyond length of string
 {
@@ -632,39 +650,37 @@ bool utf8_string::operator == (const utf8_string& rhs) const
     return false;
 }
 
-utf8_string& utf8_string::operator=(const utf8_string& other) 
+utf8_string& utf8_string::operator=(const utf8_string& other)
 // copy assignment
 {
     if (this != &other) // self-assignment check expected
-    { 
-        if (length != other.length)/* storage cannot be reused (e.g. different sizes) */
-        { 
-            if(points)
-                delete[] points;     
-            points = new code_point[other.length]; 
-        }
-        
+    {
+        reserve(other.length);
+
         for( int i=0; i<other.length; i++ )
         {
             points[i]=other[i];
         }
-        
+        length=other.length;
+
     }
     return *this;
 }
 
-utf8_string& utf8_string::operator=(utf8_string& other) 
+utf8_string& utf8_string::operator=(utf8_string&& other)
 // move assignment
 {
     if(points)
         delete[] points;        // delete this storage
     points = other.points;  // move
+    length=other.length;
+    capacity=other.capacity;
     other.points = 0; // leave moved-from in valid state
     other.length=0;
     other.capacity=0;
     return *this;
 }
-    
+
 //end utf8_string methods
 //begin uft8_friend methods
 

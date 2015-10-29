@@ -14,8 +14,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 
 
-This is a set of classes and functions for use with simple UTF-8 regex. 
-This is not meant to be a modern competitive regex library, but simply 
+This is a set of classes and functions for use with simple UTF-8 regex.
+This is not meant to be a modern competitive regex library, but simply
 functionally usefull, particularly for use in defining lexers.
 */
 
@@ -34,7 +34,7 @@ NFA_transition::NFA_transition(const code_point& _start, const code_point& _stop
 {
     start=_start;
     stop=_stop;
-}    
+}
 
 NFA_transition::NFA_transition(const code_point& _start, const code_point& _stop, unsigned int first_state)
 {
@@ -91,13 +91,13 @@ void NFA_state::add_transition(const code_point& _start, const code_point& _stop
             iter->new_states.push_back(new_state);
             return;
         }
-        else if( _start>iter->start ) 
+        else if( _start>iter->start )
         {
             ++iter;
             break;
         }
     }
-    
+
     transitions.emplace(iter, _start, _stop, new_state);
 }
 
@@ -109,15 +109,15 @@ void NFA_state::add_transition(const code_point& val, unsigned int new_state)
 std::list<unsigned int> NFA_state::get_transitions(const code_point& val)
 {
     std::list<unsigned int> ret;
-    
+
     for(NFA_transition& tran : transitions)
     {
         if(tran.in_span(val))
-        { 
+        {
             ret.insert(ret.end(), tran.new_states.begin(), tran.new_states.end());
         }
     }
-    
+
     return ret;
 }
 
@@ -145,7 +145,7 @@ NFA_automation::NFA_automation(std::list< std::shared_ptr<NFA_state> >&  _states
     num_states=_states.size();
     states.reserve( num_states );
     states.insert(states.begin(), _states.begin(),  _states.end());
-    
+
     current_states.insert(current_states.begin(), num_states, false);
     new_states.insert(new_states.begin(), num_states, false);
 }
@@ -185,25 +185,25 @@ std::pair<int, int> NFA_automation::run(const utf8_string& input, bool print_sta
         }
         if(not cont) break; //if cont is false, then we have no active states
         if(print_status) cout<<"ITER"<<endl;
-        
+
         // make epsilon transitions
         bool made_epsilon_transition=false;
         for(uint state_index=0; state_index!=num_states; state_index+=1)
         {
             if(not current_states[state_index]) continue;
-            
+
             if(states[state_index]->accepting_info>-1 and (current_position>position_matched or states[state_index]->accepting_info<accepting_info ) )
             {
                 position_matched=current_position;
                 accepting_info=states[state_index]->accepting_info;
                 if( print_status) cout<<"accepted:"<<accepting_info<<" at "<<position_matched<<endl;
             }
-            
+
             if(print_status) cout<<"transitions on epsilon:"<<endl;
             made_epsilon_transition=made_epsilon_transition or enter_states(current_states, states[state_index]->get_transitions(NFA_state::epsilon) );
         }
         if(made_epsilon_transition) continue; //repeat last bit until no epsilon transitions
-        
+
         //make transitions based upon next charector
         fill(new_states.begin(), new_states.end(), false);
         if(current_position<input.get_length())
@@ -211,16 +211,16 @@ std::pair<int, int> NFA_automation::run(const utf8_string& input, bool print_sta
             for(uint state_index=0; state_index!=num_states; state_index+=1)
             {
                 if(not current_states[state_index]) continue;
-                
+
                 if(print_status) cout<<"Transitions on "<<input[current_position]<<endl;
                 enter_states(new_states, states[state_index]->get_transitions(input[current_position]));
             }
             current_position+=1;
         }
-        
+
         current_states=new_states;
     }
-    
+
     return make_pair(position_matched, accepting_info);
 }
 
@@ -236,7 +236,7 @@ void NFA_automation::print_states()
 }
 
 //regex AST nodes
-void increment_states(list< shared_ptr<NFA_state> >& states, uint incre)
+void csu::increment_states(list< shared_ptr<NFA_state> >& states, uint incre)
 //increment all the state transitions. Usefull for get_NFA algorithms
 {
     for(shared_ptr<NFA_state>& ste : states)
@@ -247,7 +247,7 @@ void increment_states(list< shared_ptr<NFA_state> >& states, uint incre)
             //{
                 //tran.new_states[i]+=incre;
             //}
-            
+
             for(auto iter=tran.new_states.begin(), end=tran.new_states.end(); iter!=end; ++iter)
             {
                 (*iter)+=incre;
@@ -287,15 +287,15 @@ std::list< std::shared_ptr<NFA_state> > multi_span::get_NFA()
     //{
         //init_state->add_transition(initial_points[i], final_points[i], 1);
     //}
-    
+
     auto final_points_iter=final_points.begin();
     for(auto initial_pnts_iter=initial_points.begin(), initial_pnts_end=initial_points.end();  initial_pnts_iter!=initial_pnts_end;  ++initial_pnts_iter )
     {
         init_state->add_transition(*initial_pnts_iter, *final_points_iter, 1);
-        
+
         ++final_points_iter;
     }
-    
+
     return ret;
 }
 
@@ -303,7 +303,7 @@ utf8_string multi_span::repr()
 {
     utf8_string ret(initial_points.size()*5+2);
     ret.append("(");
-    
+
     auto final_points_iter=final_points.begin();
     for(auto& init_points : initial_points)
     {
@@ -326,20 +326,20 @@ std::list< std::shared_ptr<NFA_state> > kleane_closure::get_NFA()
 {
     auto exp_states=expression->get_NFA();
     increment_states(exp_states, 2);
-    
+
     shared_ptr<NFA_state> first_ste(new NFA_state);
     shared_ptr<NFA_state> final_ste(new NFA_state);
-    
+
     first_ste->add_transition(NFA_state::epsilon, 1);
     first_ste->add_transition(NFA_state::epsilon, 2);
-    
+
     auto& final_exp_state=*(++exp_states.begin());
     final_exp_state->add_transition(NFA_state::epsilon, 1);
     final_exp_state->add_transition(NFA_state::epsilon, 2);
-    
+
     exp_states.push_front(final_ste);
     exp_states.push_front(first_ste);
-    
+
     return exp_states;
 }
 
@@ -350,7 +350,7 @@ utf8_string kleane_closure::repr()
     return ret;
 }
 
-//partial_closure    
+//partial_closure
 partial_closure::partial_closure( std::shared_ptr<regex_node> _expression )
 {
     expression=_expression;
@@ -360,19 +360,19 @@ std::list< std::shared_ptr<NFA_state> > partial_closure::get_NFA()
 {
     auto exp_states=expression->get_NFA();
     increment_states(exp_states, 2);
-    
+
     shared_ptr<NFA_state> first_ste(new NFA_state);
     shared_ptr<NFA_state> final_ste(new NFA_state);
-    
+
     first_ste->add_transition(NFA_state::epsilon, 2);
-    
+
     auto& final_exp_state=*(++exp_states.begin());
     final_exp_state->add_transition(NFA_state::epsilon, 1);
     final_exp_state->add_transition(NFA_state::epsilon, 2);
-    
+
     exp_states.push_front(final_ste);
     exp_states.push_front(first_ste);
-    
+
     return exp_states;
 }
 
@@ -387,26 +387,26 @@ utf8_string partial_closure::repr()
 option_node::option_node( std::shared_ptr<regex_node> _expression )
 {
     expression=_expression;
-}  
+}
 
 std::list< std::shared_ptr<NFA_state> > option_node::get_NFA()
 {
-    
+
     auto exp_states=expression->get_NFA();
     increment_states(exp_states, 2);
-    
+
     shared_ptr<NFA_state> first_ste(new NFA_state);
     shared_ptr<NFA_state> final_ste(new NFA_state);
-    
+
     first_ste->add_transition(NFA_state::epsilon, 1);
     first_ste->add_transition(NFA_state::epsilon, 2);
-    
+
     auto& final_exp_state=*(++exp_states.begin());
     final_exp_state->add_transition(NFA_state::epsilon, 1);
-    
+
     exp_states.push_front(final_ste);
     exp_states.push_front(first_ste);
-    
+
     return exp_states;
 }
 
@@ -429,25 +429,25 @@ std::list< std::shared_ptr<NFA_state> > union_node::get_NFA()
     auto LHS_states=LHS->get_NFA();
     auto RHS_states=RHS->get_NFA();
     uint LHS_length=LHS_states.size();
-    
+
     increment_states(LHS_states, 2);
     increment_states(RHS_states, 2+LHS_length);
-    
+
     auto& final_LHS_state=*(++LHS_states.begin());
     auto& final_RHS_state=*(++RHS_states.begin());
     final_LHS_state->add_transition(NFA_state::epsilon, 1);
     final_RHS_state->add_transition(NFA_state::epsilon, 1);
-    
-    
+
+
     shared_ptr<NFA_state> first_state(new NFA_state);
     shared_ptr<NFA_state> final_state(new NFA_state);
     first_state->add_transition(NFA_state::epsilon, 2);
     first_state->add_transition(NFA_state::epsilon, 2+LHS_length);
-    
+
     LHS_states.push_front(final_state);
     LHS_states.push_front(first_state);
     LHS_states.insert(LHS_states.end(), RHS_states.begin(), RHS_states.end());
-    
+
     return LHS_states;
 }
 
@@ -477,27 +477,27 @@ std::list< std::shared_ptr<NFA_state> > concat_node::get_NFA()
 {
     shared_ptr<NFA_state> first_state(new NFA_state);
     shared_ptr<NFA_state> final_state(new NFA_state);
-    
+
     list< shared_ptr<NFA_state> > ret;
     ret.push_back(first_state);
     ret.push_back(final_state);
-    
+
     shared_ptr<NFA_state> tran_state=first_state;
     uint transition_to=2;
     for(auto& con_node : nodes)
     {
         tran_state->add_transition(NFA_state::epsilon, transition_to);
-        
+
         auto new_states=con_node->get_NFA();
         transition_to+=new_states.size();
         tran_state=*(++new_states.begin());
-        
+
         increment_states(new_states, ret.size());
-        
+
         ret.insert(ret.end(), new_states.begin(), new_states.end());
     }
     tran_state->add_transition(NFA_state::epsilon, 1);
-    
+
     return ret;
 }
 
@@ -574,7 +574,7 @@ shared_ptr<regex_node> csu::parse_literal(const utf8_string& regex, uint& positi
             position+=1;
         }
     }
-    
+
     throw gen_exception("REGEX ERROR: literal not terminated by \"");
 }
 
@@ -585,21 +585,21 @@ shared_ptr<regex_node> csu::parse_class(const utf8_string& regex, uint& position
     //bool invert=false;
     list<code_point> span_begin;
     list<code_point> span_end;
-    
+
     count_whitespace(regex, position);
-    
+
     if(position==regex_len)
     {
         throw gen_exception("REGEX ERROR: class not terminated by ]");
     }
-    
+
     //if(regex[position]=="^")
     //{
         //position+=1;
         //invert=false;
     //}
     //else
-    
+
     //check charectors at beginning
     bool in_beginning=true;
     while(in_beginning)
@@ -622,24 +622,24 @@ shared_ptr<regex_node> csu::parse_class(const utf8_string& regex, uint& position
             in_beginning=true;
         }
     }
-    
+
     while(position<regex_len)
     {
         count_whitespace(regex, position);
-        
+
         //check end
         if(regex[position]=="]")
         {
             //need to do invert here
             return shared_ptr<regex_node>(new multi_span(span_begin, span_end));
         }
-        
+
         //check range
         else if((not ((position+2)>=regex_len )) and regex[position+1]=="-")
         {
             const code_point& first_char( regex[position] );
             const code_point& second_char( regex[position+2] );
-            
+
             if(second_char>first_char)
             {
                 span_begin.push_back(first_char);
@@ -651,7 +651,7 @@ shared_ptr<regex_node> csu::parse_class(const utf8_string& regex, uint& position
                 throw gen_exception("REGEX ERROR: range start is after range end in class");
             }
         }
-        
+
         //everything else
         else
         {
@@ -660,7 +660,7 @@ shared_ptr<regex_node> csu::parse_class(const utf8_string& regex, uint& position
             position+=1;
         }
     }
-    
+
     throw gen_exception("REGEX ERROR: class not terminated by ]");
 }
 
@@ -669,7 +669,7 @@ shared_ptr<regex_node> csu::parse_single_node(const utf8_string& regex, uint& po
 {
     count_whitespace(regex, position);
     std::shared_ptr<regex_node> new_node;
-    
+
     if( regex[position]=="\"" ) //we have a literal
     {
         new_node=parse_literal(regex, position);
@@ -751,13 +751,13 @@ shared_ptr<regex_node> csu::parse_single_node(const utf8_string& regex, uint& po
     {
         throw gen_exception("REGEX EROR: unrecognized charector in regex");
     }
-        
+
     count_whitespace(regex, position);
     if(position==regex.get_length())
     {
         return new_node;
     }
-    
+
     //check for trailing operators
     if(regex[position]=="?")
     {
@@ -802,7 +802,7 @@ shared_ptr<regex_node> csu::parse_concat_node(const utf8_string& regex, uint& po
 //parses a series of regex nodes, forming them into a concat_node Will raise a gen_exception if regex can't be read
 {
     shared_ptr<concat_node> ret(new concat_node());
-    
+
     while(position<regex.get_length())
     {
         if(regex[position]==")")
@@ -816,7 +816,7 @@ shared_ptr<regex_node> csu::parse_concat_node(const utf8_string& regex, uint& po
         }
         ret->add_node(out);
     }
-    
+
     return ret;
 }
 
@@ -825,7 +825,7 @@ std::shared_ptr<regex_node> csu::parse_regex(const utf8_string& regex_pattern, u
 {
     uint symbols_parsed=0;
     std::shared_ptr<regex_node> ret =parse_concat_node(regex_pattern, symbols_parsed);
-    
+
     count_whitespace(regex_pattern, symbols_parsed);
     chars_counted=symbols_parsed;
     return ret;
@@ -837,7 +837,7 @@ NFA_automation csu::compile_regex_NFA(std::list<utf8_string> patterns)
     list< shared_ptr<NFA_state> > total_NFA;
     shared_ptr<NFA_state> first_state(new NFA_state);
     total_NFA.push_back(first_state);
-    
+
     int pattern_number=0;
     for(auto& pattern : patterns)
     {
@@ -847,12 +847,12 @@ NFA_automation csu::compile_regex_NFA(std::list<utf8_string> patterns)
             throw gen_exception("full regex cannot be parsed");
         if( not regex_tree)
             throw gen_exception("could not parse regex");
-        
+
         //get new states, make end state as accepting
         list< shared_ptr<NFA_state> > new_states=regex_tree->get_NFA();
         (*(++new_states.begin()))->accepting_info=pattern_number;
         pattern_number+=1;
-        
+
         //add to total NFA
         increment_states(new_states, total_NFA.size());
         first_state->add_transition(NFA_state::epsilon, total_NFA.size());
@@ -866,9 +866,9 @@ NFA_automation csu::compile_regex_NFA(std::list<utf8_string> patterns)
 list< shared_ptr<DFA_state> > csu::NFA_to_DFA(const list< shared_ptr<NFA_state> >& NFA_states)
 {
     typedef shared_ptr<list<unsigned int>> NFA_IN_DFA_TYPE;
-    
+
     //epsilon closure on some DFA state. No return
-    struct EC{ void operator() (NFA_IN_DFA_TYPE dfa_state)  
+    struct EC{ void operator() (NFA_IN_DFA_TYPE dfa_state)
     {
         for( auto iter=dfa_state->begin(); iter!= dfa_state->end(); ++iter ) //recalculating 'end' is inefficient, but the iterator may change?
         {
@@ -881,9 +881,9 @@ list< shared_ptr<DFA_state> > csu::NFA_to_DFA(const list< shared_ptr<NFA_state> 
     EC(const list< shared_ptr<NFA_state> >& __NFA_states) :_NFA_states(__NFA_states) {}
     const list< shared_ptr<NFA_state> >& _NFA_states;
     } epsilon_closure(NFA_states);
-    
+
     //check if state_to_find is in a_DFA_state. If so, return location. If not, add the state to the state_list and return location
-    struct { uint operator() (list<NFA_IN_DFA_TYPE>& all_DFA_states, NFA_IN_DFA_TYPE state_to_find)  
+    struct { uint operator() (list<NFA_IN_DFA_TYPE>& all_DFA_states, NFA_IN_DFA_TYPE state_to_find)
     {
         uint state_index=0;
         for(auto current_DFA_state : all_DFA_states)
@@ -895,20 +895,20 @@ list< shared_ptr<DFA_state> > csu::NFA_to_DFA(const list< shared_ptr<NFA_state> 
             }
             state_index+=1;
         }
-        
+
         //could not find the state
         all_DFA_states.push_back(state_to_find);
         return state_index;
     }} find_state;
-    
+
     //initallize some data structures
     list<NFA_IN_DFA_TYPE> current_DFA_states;
     list< shared_ptr<DFA_state> >  return_DFA_states;
-    
+
     NFA_IN_DFA_TYPE start_state( new list<unsigned int>({0}));
     epsilon_closure(start_state);
     current_DFA_states.push_back(start_state);
-    
+
     //loop over each DFA of NFA
     for(auto dfa_of_nfa_state : current_DFA_states)
     {
@@ -922,14 +922,14 @@ list< shared_ptr<DFA_state> > csu::NFA_to_DFA(const list< shared_ptr<NFA_state> 
                 {
                     continue; //ignore epsilon transitions.
                 }
-                
+
                 NFA_transition NFA_tran(NFA_tran_.start,NFA_tran_.stop, NFA_tran_.new_states) ; //copy the NFA transition, as it will be modified
                 //now we compare NFA_tran to each of the transitions in the DFA
                 list< NFA_transition > new_DFA_transitions;
                 bool add_NFA_tran=true;
                 for(auto& DFA_tran : DFA_transitions) //we are trying to add NFA_tran into DFA_transitions, but we need to remove all overlap
                 {
-                    
+
                     if(DFA_tran.is_lesser(NFA_tran.stop) or DFA_tran.is_greater(NFA_tran.start))//new transition is out of range of old transition
                     {
                         //do nothing
@@ -946,7 +946,7 @@ list< shared_ptr<DFA_state> > csu::NFA_to_DFA(const list< shared_ptr<NFA_state> 
                         {
                             //insert states to DFA_tran.
                             DFA_tran.new_states.insert(DFA_tran.new_states.end(), NFA_tran.new_states.begin(), NFA_tran.new_states.end() );
-                            
+
                             //modify NFA_tran
                             auto DFA_end=DFA_tran.stop.to_UTF32();
                             NFA_tran.start=code_point(DFA_end+1);
@@ -955,7 +955,7 @@ list< shared_ptr<DFA_state> > csu::NFA_to_DFA(const list< shared_ptr<NFA_state> 
                         {
                             //insert states to NFA_tran.
                             NFA_tran.new_states.insert(NFA_tran.new_states.end(), DFA_tran.new_states.begin(), DFA_tran.new_states.end() );
-                            
+
                             //modify DFA_tran
                             auto NFA_end=NFA_tran.stop.to_UTF32();
                             DFA_tran.start=code_point(NFA_end+1);
@@ -967,7 +967,7 @@ list< shared_ptr<DFA_state> > csu::NFA_to_DFA(const list< shared_ptr<NFA_state> 
                         {
                             //insert states to NFA_tran.
                             NFA_tran.new_states.insert(NFA_tran.new_states.end(), DFA_tran.new_states.begin(), DFA_tran.new_states.end() );
-                            
+
                             //modify DFA_tran
                             auto NFA_start=NFA_tran.start.to_UTF32();
                             DFA_tran.stop=code_point(NFA_start-1);
@@ -976,12 +976,12 @@ list< shared_ptr<DFA_state> > csu::NFA_to_DFA(const list< shared_ptr<NFA_state> 
                         {
                             //insert states to DFA_tran.
                             DFA_tran.new_states.insert(DFA_tran.new_states.end(), NFA_tran.new_states.begin(), NFA_tran.new_states.end() );
-                            
+
                             //modify DFA_tran
                             auto DFA_start=DFA_tran.start.to_UTF32();
                             NFA_tran.stop=code_point(DFA_start-1);
                         }
-                        
+
                     }
                     else if(DFA_tran.in_span(NFA_tran.start) and not DFA_tran.in_span(NFA_tran.stop)) //begining of new transition is at end of old transtion
                     {
@@ -989,11 +989,11 @@ list< shared_ptr<DFA_state> > csu::NFA_to_DFA(const list< shared_ptr<NFA_state> 
                         NFA_transition new_tran(NFA_tran.start, DFA_tran.stop, DFA_tran.new_states); //new transition, with DFA states
                         new_tran.new_states.insert(new_tran.new_states.end(), NFA_tran.new_states.begin(), NFA_tran.new_states.end()); //add NFA states
                         new_DFA_transitions.push_back(new_tran);
-                        
+
                         //modify DFA_tran
                         auto end_char=NFA_tran.start.to_UTF32();
                         DFA_tran.stop=code_point(end_char-1);
-                        
+
                         //modify NFA_tran
                         auto start_char=DFA_tran.stop.to_UTF32();
                         NFA_tran.start=code_point(start_char+1);
@@ -1004,11 +1004,11 @@ list< shared_ptr<DFA_state> > csu::NFA_to_DFA(const list< shared_ptr<NFA_state> 
                         NFA_transition new_tran(DFA_tran.start, NFA_tran.stop, DFA_tran.new_states); //new transition, with DFA states
                         new_tran.new_states.insert(new_tran.new_states.end(), NFA_tran.new_states.begin(), NFA_tran.new_states.end()); //add NFA states
                         new_DFA_transitions.push_back(new_tran);
-                        
+
                         //modify NFA_tran
                         auto end_char=DFA_tran.start.to_UTF32();
                         NFA_tran.stop=code_point(end_char-1);
-                        
+
                         //modify DFA_tran
                         auto start_char=NFA_tran.stop.to_UTF32();
                         DFA_tran.start=code_point(start_char+1);
@@ -1016,29 +1016,29 @@ list< shared_ptr<DFA_state> > csu::NFA_to_DFA(const list< shared_ptr<NFA_state> 
                     else if(DFA_tran.in_span(NFA_tran.stop) and DFA_tran.in_span(NFA_tran.start)) //new transition is in old transition
                     {
                         //append DFA_tran states to NFA_tran
-                        NFA_tran.new_states.insert(NFA_tran.new_states.end(), DFA_tran.new_states.begin(),  DFA_tran.new_states.end()); 
+                        NFA_tran.new_states.insert(NFA_tran.new_states.end(), DFA_tran.new_states.begin(),  DFA_tran.new_states.end());
                         auto NFA_start=NFA_tran.start.to_UTF32();
                         auto NFA_end=NFA_tran.stop.to_UTF32();
-                        
+
                         //new_transition
                         NFA_transition new_tran(code_point(NFA_end+1), DFA_tran.stop, DFA_tran.new_states); //new transition, with DFA states
                         new_DFA_transitions.push_back(new_tran);
-                        
+
                         //modify DFA_tran
                         DFA_tran.stop=code_point(NFA_start-1);
-                        
+
                     }
                     else if(NFA_tran.in_span(DFA_tran.stop) and NFA_tran.in_span(DFA_tran.start)) //old transition is in new transition
                     {
                         //append NFA_tran states to DFA_tran
-                        DFA_tran.new_states.insert(DFA_tran.new_states.end(), NFA_tran.new_states.begin(),  NFA_tran.new_states.end()); 
+                        DFA_tran.new_states.insert(DFA_tran.new_states.end(), NFA_tran.new_states.begin(),  NFA_tran.new_states.end());
                         auto DFA_start=DFA_tran.start.to_UTF32();
                         auto DFA_end=DFA_tran.stop.to_UTF32();
-                        
+
                         //new_transition
                         NFA_transition new_tran(code_point(DFA_end+1), NFA_tran.stop, NFA_tran.new_states); //new transition, with DFA states
                         new_DFA_transitions.push_back(new_tran);
-                        
+
                         //modify NFA_tran
                         NFA_tran.stop=code_point(DFA_start-1);
                     }
@@ -1053,9 +1053,9 @@ list< shared_ptr<DFA_state> > csu::NFA_to_DFA(const list< shared_ptr<NFA_state> 
                 if(add_NFA_tran) DFA_transitions.push_back(NFA_tran);
             }
         }
-        
+
         ////now, DFA_transitions is a set of non-overlaping transitions to sets of NFA states
-        
+
         //find accepting info
         int accepting_info=-1;
         for(unsigned int NFA_ste_index : *dfa_of_nfa_state)
@@ -1073,15 +1073,15 @@ list< shared_ptr<DFA_state> > csu::NFA_to_DFA(const list< shared_ptr<NFA_state> 
                 }
             }
         }
-        
+
         shared_ptr<DFA_state> new_DFA_state(new DFA_state(accepting_info));
         //loop over each NFA_transition, making the appropriate DFA states and transitions
         for(auto& DFA_tran : DFA_transitions)
         {
-            NFA_IN_DFA_TYPE current_transition_state( new list<unsigned int>(DFA_tran.new_states));          
+            NFA_IN_DFA_TYPE current_transition_state( new list<unsigned int>(DFA_tran.new_states));
             epsilon_closure(current_transition_state);
             uint new_DFA_state_index=find_state(current_DFA_states, current_transition_state  );
-            
+
             //need to see if the new transition can be appended onto an old transition
             bool found=false;
             for(auto& old_tran : new_DFA_state->transitions)
@@ -1105,18 +1105,18 @@ list< shared_ptr<DFA_state> > csu::NFA_to_DFA(const list< shared_ptr<NFA_state> 
                 new_DFA_state->add_transition(DFA_tran.start, DFA_tran.stop, new_DFA_state_index);
             }
         }
-        
+
         return_DFA_states.push_back(new_DFA_state);
     }
     return return_DFA_states;
 }
 
 DFA_automation csu::compile_regex_DFA(std::list<utf8_string> patterns)
-{    
+{
     list< shared_ptr<NFA_state> > total_NFA;
     shared_ptr<NFA_state> first_state(new NFA_state);
     total_NFA.push_back(first_state);
-    
+
     int pattern_number=0;
     for(auto& pattern : patterns)
     {
@@ -1126,24 +1126,24 @@ DFA_automation csu::compile_regex_DFA(std::list<utf8_string> patterns)
             throw gen_exception("full regex cannot be parsed");
         if( not regex_tree)
             throw gen_exception("could not parse regex");
-        
+
         //get new states, make end state as accepting
         list< shared_ptr<NFA_state> > new_states=regex_tree->get_NFA();
         (*(++new_states.begin()))->accepting_info=pattern_number;
         pattern_number+=1;
-        
+
         //add to total NFA
         increment_states(new_states, total_NFA.size());
         first_state->add_transition(NFA_state::epsilon, total_NFA.size());
         total_NFA.insert(total_NFA.end(), new_states.begin(), new_states.end());
     }
-    
+
     auto DFA_states=NFA_to_DFA(total_NFA);
 
     //print out states before minimization?
     DFA_states=DFA_minimization(DFA_states);
     //print states after minimization?
-        
+
     return DFA_automation(DFA_states);
 }
 
@@ -1154,16 +1154,16 @@ list< shared_ptr<DFA_state> > csu::DFA_minimization(const list< shared_ptr<DFA_s
         public:
         shared_ptr<DFA_state> state;
         uint index;
-        
+
         state_index(shared_ptr<DFA_state> _state, uint _index)
         {
             state=_state;
             index=_index;
         }
-    }; 
-    
+    };
+
     list< list<state_index> > partitions;
-    
+
     //sort each state into partitions, according to accepting_state
     uint state_i=0;
     for(auto state : _DFA_states)
@@ -1178,14 +1178,14 @@ list< shared_ptr<DFA_state> > csu::DFA_minimization(const list< shared_ptr<DFA_s
                 break;
             }
         }
-        
+
         if(not found)
         {
             partitions.push_back(list<state_index>({ state_index(state, state_i) }));
         }
         state_i++;
     }
-    
+
     //break each partition into smaller partitions
     //two states are distinguishable if there is an input that leads to a different state
     bool continue_partitioning=true;
@@ -1195,11 +1195,11 @@ list< shared_ptr<DFA_state> > csu::DFA_minimization(const list< shared_ptr<DFA_s
         for(auto& group : partitions) //partition group, is a list of state_index
         {
             list<list<state_index> > new_partitions_of_group;//the new partitions of the group
-            
+
             for(auto& group_state_index : group) //place each state in group into a partition in new_partitions_of_group
             {
                 bool found=false;
-                
+
                 for(auto& new_group : new_partitions_of_group)//search each of the new partitions
                 {
                     if(not group_state_index.state->distinguishable(new_group.begin()->state) )
@@ -1209,16 +1209,16 @@ list< shared_ptr<DFA_state> > csu::DFA_minimization(const list< shared_ptr<DFA_s
                         break;
                     }
                 }
-                
+
                 if(not found)
                 {
                     new_partitions_of_group.push_back( list<state_index>( { group_state_index } ));
                 }
             }
-            
+
             new_partitions.insert(new_partitions.end(), new_partitions_of_group.begin(), new_partitions_of_group.end()); //place the new_partitions_of_group into all new_partitions
         }
-        
+
         //check continue partition
         if(new_partitions.size() == partitions.size()) //then no new groups were added
         {
@@ -1229,14 +1229,14 @@ list< shared_ptr<DFA_state> > csu::DFA_minimization(const list< shared_ptr<DFA_s
             partitions.swap(new_partitions); //place the new partitions back into partitions, and do it again!!
         }
     }
-    
+
     //choose a representitive for each group
     list<shared_ptr<DFA_state> >  new_DFA;
     list< list< uint > >  spans; //a list of uints. Each int is a state that is covered by the associated group
     for(auto& group : partitions)
     {
         new_DFA.push_back( group.begin()->state );
-        
+
         list< uint > states_in_group;
         for(auto& group_state_index : group)
         {
@@ -1244,7 +1244,7 @@ list< shared_ptr<DFA_state> > csu::DFA_minimization(const list< shared_ptr<DFA_s
         }
         spans.push_back(states_in_group); //probably really slow. Oh Well...
     }
-    
+
     //now set each transition in each state to point to the correct group
     for(auto& state : new_DFA)
     {
@@ -1268,7 +1268,7 @@ list< shared_ptr<DFA_state> > csu::DFA_minimization(const list< shared_ptr<DFA_s
             }
         }
     }
-    
+
     //remove dead state?  Shouldn't be a dead state with our methods
     return new_DFA;
 }
@@ -1337,7 +1337,7 @@ void DFA_state::add_transition(const code_point& _start, const code_point& _stop
     {
         throw gen_exception("the new transition cannot be in any other transition");
     }
-    
+
     transitions.emplace(transitions.end(), _start, _stop, new_state);
 }
 
@@ -1381,7 +1381,7 @@ bool DFA_state::distinguishable(std::shared_ptr<DFA_state> LHS)
 }
 
 //DFA automation
-    
+
 DFA_automation::DFA_automation(list<shared_ptr<DFA_state>>& _DFA_states)
 {
     DFA_states.insert(DFA_states.begin(), _DFA_states.begin(), _DFA_states.end());
@@ -1412,7 +1412,7 @@ pair<int, int> DFA_automation::run(const utf8_string& input, bool print_status)
     int last_accepting_state=-1;
     int last_accepting_info=-1;
     uint Nchars=input.get_length();
-    
+
     for(uint i=0; i<Nchars; i++)
     {
         if(state->accepting_info != -1)
@@ -1420,37 +1420,37 @@ pair<int, int> DFA_automation::run(const utf8_string& input, bool print_status)
             last_accepting_chars=chars_read;
             last_accepting_state=state_index;
             last_accepting_info=state->accepting_info;
-            
+
             if(print_status)
             {
                 cout<<"accepted state: "<<last_accepting_state<<endl;
             }
         }
-        
+
         int new_state=state->get_transition(input[i]);
         if(new_state==-1)
         {
             cout<<"no transition on "<<input[i]<<". End iteration"<<endl;
             break;
         }
-        
+
         state_index=new_state;
         state=DFA_states[state_index];
         chars_read++;
         cout<<"on "<<input[i]<<" transition to "<<state_index<<endl;
     }
-    
+
     if(state->accepting_info != -1)
     {
         last_accepting_chars=chars_read;
         last_accepting_state=state_index;
         last_accepting_info=state->accepting_info;
-        
+
         if(print_status)
         {
             cout<<"accepted state: "<<last_accepting_state<<endl;
         }
     }
-    
+
     return make_pair(last_accepting_chars, last_accepting_info);
 }

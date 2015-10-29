@@ -18,6 +18,7 @@ add_executable(CSU_unit_tests
               ./type_erasure_test.cpp
               ./lexer_test.cpp
               ${utils}/lexer.cpp
+              ${utils}/regex.cpp
               ${utils}/UTF8.cpp)
               
           
