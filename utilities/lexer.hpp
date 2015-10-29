@@ -136,41 +136,41 @@ public:
     //reject the read string. back end_node to start_node
 };
 
+template<typename return_type> lexer;
+
 template<typename return_type>
 class lexing_functor
 //a class to overload in order to return data from lexer. If not subclassed, it will just return an empty return_type
-//still a  fairly light class
 {
 public:
-    bool return_data;
-    lexing_functor()
-    {
-        return_data=true;
-    }
-    
-    lexing_functor(bool _return_data)
-    {
-        return_data=_return_data;
-    }
-
-    virtual return_type operator()(const utf8_string& data, const location_span& loc, bool& _return_data)
-    {
-        _return_data=return_data;
-        return *this(data, loc);
-    }
-    
-    virtual return_type operator (const utf8_string& data, const location_span& loc)
+    virtual return_type operator()(const utf8_string& data, const location_span& loc, lexer<return_type>* lex)
     {
         return return_type();
     }
 };
 
 template<typename return_type>
+class keep_parsing : lexing_functor<return_type>
+//a class inherating from lexing_functor, createing a functor that keeps lexing without returning the data
+{
+public:
+    virtual return_type operator()(const utf8_string& data, const location_span& loc, lexer<return_type>* lex)
+    {
+        lex->continue_parsing(true);
+        return *this(data, loc);
+    }
+
+    //this can be overloaded to allow for more specific behavior
+    virtual return_type operator (const utf8_string& data, const location_span& loc) {} 
+};
+
+template<typename return_type>
 class stl_functional : lexing_functor< return_type>
-//a subclass of lexing_functor, that can use the stl_functional type
+//a subclass of lexing_functor, that can use the stl_functional type, for use with lamdba functions. returns data by default. Can be set to not return data.
 {
 private:
     std::function<return_type (utf8_string&, location_span&)> func;
+    bool return_data;
 
 public:
 
@@ -179,9 +179,19 @@ public:
         func=_func;
         return_data=true;
     }
-
-    virtual return_type operator()(utf8_string& data, location_span& loc )
+    
+    stl_functional(bool _ret_data, std::function<return_type (utf8_string&, location_span&)> _func)
     {
+        func=_func;
+        return_data=_ret_data;
+    }
+
+    virtual return_type operator()(utf8_string& data, location_span& loc, lexer<return_type>* lex)
+    {
+        if(not return_data)
+        {
+            lex->continue_parsing(true);
+        }
         return func(data, loc);
     }
 };
@@ -203,6 +213,7 @@ private:
     
     //state
     unsigned int lexer_state;
+    bool continue_lexing_b; //a variable to tell if we keep lexing after we kind a token?
 
 public:
     location loc();
@@ -210,6 +221,7 @@ public:
     lexer(lexing_functor<return_type> _EOF_action, std::shared_ptr< std::vector< std::shared_ptr<DFA_state> > > _state_table, 
                 std::shared_ptr< std::vector< lexing_functor<return_type> > > _actions, std::shared_ptr< std::vector< unsigned int> > _lexer_states)
     {
+        continue_lexing_b=false;
         lexer_state=0;
         EOF_action=_EOF_action;
         actions=_actions;
@@ -230,10 +242,15 @@ public:
         input_buffer->insert(data);
     }
     
-    //lexing functions
+    //lexing control functions
     void set_state(unsigned int _new_state)
     {
         lexer_state=_new_state;
+    }
+    
+    void continue_lexing(bool _cont_lex)
+    {
+        continue_lexing_b=_cont_lex;
     }
     
     return_type operator()()
@@ -265,11 +282,11 @@ public:
             
             if( has_read_accepting_state )
             {
-                bool return_data=true;
+                continue_lexing_b=false;
                 utf8_string data=input_buffer->reset_string();
                 location_span span=loc.update(data);
-                auto ret_data=(*actions)[last_action_index](data, span, return_data);
-                if(return_data)
+                auto ret_data=(*actions)[last_action_index](data, span, this);
+                if(not continue_lexing_b)
                 {
                     return ret_data;
                 }
@@ -337,6 +354,8 @@ public:
     {
         EOF_action=_action;
     }
+I AM HERE
+NEED TO UPDATE THESE FUNCS
     
     void add_nonreturn_pattern(utf8_string _regular_exp)
     //add a regex pattern, where the lexer will just eat the pattern and keep parsing.
