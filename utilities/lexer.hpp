@@ -148,6 +148,7 @@ public:
     lexer_exception(Ts... _msgs)
     {
         add_msg(_msgs...);
+        std::cout<<"LEXER EXCEPTION THROWN:"<<msg.str()<<std::endl;
     }
 
     template<typename T, typename... Ts>
@@ -206,6 +207,17 @@ public:
         input_buffer=std::shared_ptr<ring_buffer>(new ring_buffer(tmp));
     }
 
+    void print_machine()
+    {
+        unsigned int i=0;
+        for(auto DFE: *state_table)
+        {
+            std::cout<<"state: "<<i<<std::endl;
+            DFE->print();
+            i++;
+        }
+    }
+
     void reset()
     //reset the lexer state to keep lexing. Does not alter the location in the input source.
     {
@@ -257,6 +269,7 @@ public:
             {
                 if(DFA_state->accepting_info != -1)
                 {
+                    std::cout<<"accepted:"<<DFA_state_index<<" :"<<last_action_index<<std::endl;
                     has_read_accepting_state=true;
                     last_action_index=DFA_state->accepting_info;
                 }
@@ -264,6 +277,7 @@ public:
                 int new_state=DFA_state->get_transition( input_buffer->next() );
                 if(new_state==-1)
                 {
+                    std::cout<<"no transition on:"<<input_buffer->next()<<":"<<std::endl;
                     break; //no transition
                 }
                 else
@@ -280,6 +294,12 @@ public:
                 utf8_string data=input_buffer->reset_string();
                 location_span span=loc.update(data);
                 auto ret_data=(*actions)[last_action_index](data, span, this); //control functions can be called here, and change lexer state
+                std::cout<<"data:"<<data<<": at "<<span<<std::endl;
+                if(continue_lexing_b) std::cout<<"will continue lexing"<<std::endl;
+                else std::cout<<"will return"<<std::endl;
+                std::cout<<"GOT A:"<<ret_data<<" CONTINUE?"<<std::endl;
+                std::string tmp;
+                //std::cin>>tmp; //pause untill input
                 if(not continue_lexing_b)
                 {
                     return ret_data;
@@ -287,7 +307,7 @@ public:
             }
             else if(input_buffer->has_read_EOF)
             {
-
+                std::cout<<"HAS READ EOF"<<std::endl;
                 if(input_buffer->length_read==0) //legitamate EOF
                 {
                     continue_lexing_b=false;

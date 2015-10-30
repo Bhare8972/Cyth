@@ -46,6 +46,7 @@ TEST_CASE( "test lexer", "[lexer]" )
     auto lex=gen.get_lexer();
     lex.set_input(src);
 
+    lex.print_machine();
     //lex!
     //first four tokens are just qs
     INFO("first test")
@@ -57,6 +58,8 @@ TEST_CASE( "test lexer", "[lexer]" )
     INFO("fourth test")
     REQUIRE(lex()==1);
 
+    INFO("fifth test")
     REQUIRE(lex()==2); //we get a comment
+    INFO("sixth test")
     REQUIRE(lex()==-1); //and an EOF
 }

@@ -225,7 +225,7 @@ utf8_string ring_buffer::reset_string()
 //set start_node to end_node, and return string that was read
 {
     auto ret=get_string();
-    start_node=end_node->previous;
+    start_node=end_node;//->previous;
     length_read=0;
     return ret;
 }

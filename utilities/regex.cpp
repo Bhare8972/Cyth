@@ -528,12 +528,14 @@ shared_ptr<regex_node> csu::parse_literal(const utf8_string& regex, uint& positi
 //parse a regex literal
 {
     list< shared_ptr<regex_node> > chars;
-    //list<code_point> chars;
+    position+=1;
     while(position<regex.get_length())
     {
         if(regex[position]=="\"")
         {
-            return shared_ptr<regex_node>(new concat_node(chars));
+            auto a=shared_ptr<regex_node>(new concat_node(chars));
+            cout<< "literal AST:"<<a->repr() <<": from:"<<regex<<":"<<endl;
+            return a;
         }
         else if(regex[position]=="\\")//escape char
         {
@@ -566,6 +568,7 @@ shared_ptr<regex_node> csu::parse_literal(const utf8_string& regex, uint& positi
             {
                 throw gen_exception("REGEX ERROR: unrecognized escape charector");
             }
+            position+=1;
         }
         else
         {
