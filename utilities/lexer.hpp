@@ -148,7 +148,11 @@ public:
     lexer_exception(Ts... _msgs)
     {
         add_msg(_msgs...);
-        std::cout<<"LEXER EXCEPTION THROWN:"<<msg.str()<<std::endl;
+    }
+    
+    lexer_exception(const lexer_exception& to_copy) : msg(to_copy.msg.str() )
+    //copy constructor
+    {
     }
 
     template<typename T, typename... Ts>
@@ -269,7 +273,6 @@ public:
             {
                 if(DFA_state->accepting_info != -1)
                 {
-                    std::cout<<"accepted:"<<DFA_state_index<<" :"<<last_action_index<<std::endl;
                     has_read_accepting_state=true;
                     last_action_index=DFA_state->accepting_info;
                 }
@@ -277,7 +280,6 @@ public:
                 int new_state=DFA_state->get_transition( input_buffer->next() );
                 if(new_state==-1)
                 {
-                    std::cout<<"no transition on:"<<input_buffer->next()<<":"<<std::endl;
                     break; //no transition
                 }
                 else
@@ -287,6 +289,13 @@ public:
                     DFA_state=(*state_table)[DFA_state_index+initial_DFA_index];
                 }
             }
+            
+            if(input_buffer->has_read_EOF and DFA_state->accepting_info != -1)
+            //there may be an unaccepted state if the next char is EOF
+            {
+                has_read_accepting_state=true;
+                last_action_index=DFA_state->accepting_info;
+            }
 
             if( has_read_accepting_state )
             {
@@ -294,12 +303,7 @@ public:
                 utf8_string data=input_buffer->reset_string();
                 location_span span=loc.update(data);
                 auto ret_data=(*actions)[last_action_index](data, span, this); //control functions can be called here, and change lexer state
-                std::cout<<"data:"<<data<<": at "<<span<<std::endl;
-                if(continue_lexing_b) std::cout<<"will continue lexing"<<std::endl;
-                else std::cout<<"will return"<<std::endl;
-                std::cout<<"GOT A:"<<ret_data<<" CONTINUE?"<<std::endl;
                 std::string tmp;
-                //std::cin>>tmp; //pause untill input
                 if(not continue_lexing_b)
                 {
                     return ret_data;
@@ -307,7 +311,6 @@ public:
             }
             else if(input_buffer->has_read_EOF)
             {
-                std::cout<<"HAS READ EOF"<<std::endl;
                 if(input_buffer->length_read==0) //legitamate EOF
                 {
                     continue_lexing_b=false;
@@ -331,13 +334,14 @@ public:
             {
                 utf8_string data=input_buffer->reset_string();
                 location_span span=loc.update(data);
-                throw lexer_exception("Could not read token( ", data, " ) was fully lexed at ", span);
+                throw lexer_exception("Could not read token(", data, ") at ", span);
             }
         }
 
     }
 };
 
+//some utility functions and classes used in the lexer_generator
 template<typename return_type >
 class lex_func_keep_lexing
 {
@@ -348,6 +352,21 @@ public:
         return return_type();
     }
 };
+
+template<typename T>
+void binary_write(std::ostream& output, T to_write)
+//write a bit of numerical data to a file.
+{
+    output.write((char*)&to_write,sizeof(to_write));
+}
+
+template<typename T>
+void binary_read(std::istream& input, T& to_read)
+//read a bit of numerical data from a file. 
+//type must match when it was written, or will be inconsisitant
+{
+    input.read((char*)&to_read,sizeof(to_read));
+}
 
 template<typename return_type >
 class lexer_generator
@@ -374,7 +393,7 @@ private:
     //lexer table information
     std::shared_ptr< std::vector< std::shared_ptr<DFA_state> > > state_table;
     std::shared_ptr< std::vector< lex_func_t > > actions;
-    std::shared_ptr< std::vector< unsigned int> > lexer_states; //a vector that contains whicch state in state_table is the starting point for a given lexer-state
+    std::shared_ptr< std::vector< unsigned int> > lexer_states; //a vector that contains which state in state_table is the starting point for a given lexer-state
 
     lex_func_t EOF_action;
 
@@ -435,18 +454,101 @@ public:
         }
     }
 
-    lexer<return_type> get_lexer()
+    lexer<return_type> get_lexer(bool do_file_IO=true)
     {
         if( not made_table)
         {
-            //need to check if the file exists
-            //if so, open the file
-            //else, generate_state_tables and save to the file
+            if(do_file_IO)
+            {
+                load_from_file();
+            }
 
-            generate_state_tables();
+            if(not made_table)
+            {
+                generate_state_tables();
+                if(do_file_IO) load_to_file();
+            }
         }
 
         return lexer<return_type>(EOF_action, state_table, actions, lexer_states);
+    }
+    
+    void load_from_file()
+    //read the state table from a file
+    {
+        std::ifstream fin(state_table_file_name.to_cpp_string());
+        if(not fin) return;
+        
+        //reset the generator.
+        state_table.reset();
+        lexer_states.reset();
+        made_table=false;
+        
+        //get state_table
+        unsigned int num_states=0;
+        binary_read(fin, num_states);
+        state_table=std::shared_ptr<std::vector< std::shared_ptr<DFA_state> > > (new std::vector< std::shared_ptr<DFA_state> >() );
+        state_table->reserve(num_states);
+        for(uint i=0; i<num_states; i++)
+        {
+            std::shared_ptr<DFA_state> NDFS(new DFA_state());
+            binary_read(fin, NDFS->accepting_info);
+            uint N_transitions=0;
+            binary_read(fin, N_transitions);
+            for(uint j=0; j<N_transitions; j++)
+            {
+                DFA_transition new_tran;
+                binary_read(fin, new_tran.new_state);
+                new_tran.start=code_point(fin);
+                new_tran.stop=code_point(fin);
+                NDFS->transitions.push_back(new_tran);
+            }
+            state_table->push_back(NDFS);
+        }
+        
+        //get lexer_states
+        unsigned int N_lexer_states=0;
+        binary_read(fin, N_lexer_states);
+        lexer_states=std::shared_ptr<std::vector< unsigned int > >( new std::vector< unsigned int >( ) );
+        lexer_states->reserve(N_lexer_states);
+        for(uint i=0; i<N_lexer_states; i++)
+        {
+            uint j=0;
+            binary_read(fin, j);
+            lexer_states->push_back(j);
+        }
+        made_table=true;
+    }
+    
+    void load_to_file()
+    //serialize the state_table to a file
+    {
+        if(not made_table) return;
+        
+        std::ofstream fout(state_table_file_name.to_cpp_string(), std::ios_base::binary);
+        //first we output state_table
+        uint num_states=state_table->size();
+        binary_write(fout, num_states);
+        for(auto ste : *state_table)
+        {
+            binary_write(fout, ste->accepting_info);
+            uint N_transitions=ste->transitions.size();
+            binary_write(fout, N_transitions);
+            for(auto& tran : ste->transitions)
+            {
+                binary_write(fout, tran.new_state);
+                tran.start.put(fout);
+                tran.stop.put(fout);
+            }
+        }
+        //then we output lexer_states
+        uint N_lexer_states=lexer_states->size();
+        binary_write(fout, N_lexer_states);
+        for(auto lex_ste : *lexer_states)
+        {
+            uint j=lex_ste;
+            binary_write(fout, j);
+        }
     }
 
 private:
@@ -473,6 +575,7 @@ private:
                     throw gen_exception("full regex cannot be parsed");
                 if( not regex_tree)
                     throw gen_exception("could not parse regex");
+                
 
                 //get new states, make end state as accepting
                 std::list< std::shared_ptr<NFA_state> > new_states=regex_tree->get_NFA();
@@ -499,7 +602,7 @@ private:
         made_table=true;
     }
 };
-
+#define LEX_FUNC(TYPE) [](const utf8_string& data, const location_span& loc, lexer<TYPE>* lex)->TYPE
 
 
 } //end csu namespace

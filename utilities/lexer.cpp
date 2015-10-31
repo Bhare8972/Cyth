@@ -161,8 +161,15 @@ void ring_buffer::load_data()
     while( (empty_node->next != start_node) and (not fin.eof()))
     {
         empty_node->charector=code_point(fin);
-        empty_node=empty_node->next;
-        length_loaded++;
+        if(empty_node->charector.is_empty())
+        {
+            has_loaded_EOF=true;
+        }
+        else
+        {
+            empty_node=empty_node->next;
+            length_loaded++;
+        }
     }
 
     if(fin.eof())
@@ -178,7 +185,6 @@ code_point ring_buffer::next()
     {
         return code_point();
     }
-
     return end_node->charector;
 }
 
@@ -226,6 +232,7 @@ utf8_string ring_buffer::reset_string()
 {
     auto ret=get_string();
     start_node=end_node;//->previous;
+    length_loaded-=length_read;
     length_read=0;
     return ret;
 }

@@ -534,7 +534,6 @@ shared_ptr<regex_node> csu::parse_literal(const utf8_string& regex, uint& positi
         if(regex[position]=="\"")
         {
             auto a=shared_ptr<regex_node>(new concat_node(chars));
-            cout<< "literal AST:"<<a->repr() <<": from:"<<regex<<":"<<endl;
             return a;
         }
         else if(regex[position]=="\\")//escape char
@@ -1277,6 +1276,8 @@ list< shared_ptr<DFA_state> > csu::DFA_minimization(const list< shared_ptr<DFA_s
 }
 
 //DFA transition
+DFA_transition::DFA_transition(){}
+
 DFA_transition::DFA_transition(const code_point& _start, const code_point& _stop)
 {
     start=_start;

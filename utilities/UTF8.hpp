@@ -92,6 +92,11 @@ public:
 
     uint32_t to_UTF32() const;
     //return this charector encoded as UTF32
+    
+    bool is_empty() const;
+    
+    void put(std::ostream& out_stream);
+    //put this code_point into a stream
 
 }; //end code_point
 

@@ -35,6 +35,12 @@ code_point::code_point()
 
 code_point::code_point( const code_point& rhs)
 {
+    if(rhs.code_units==0)
+    {
+        code_units=0;
+        return;
+    }
+    
     int l=rhs.NUnits();
     code_units=new uint8_t[l];
     for(int x=0; x<l; x++)
@@ -90,14 +96,23 @@ code_point::code_point( const uint32_t _UTF32)
 }
 
 code_point::code_point(std::istream& input_stream)
+//read a codepoint from an input stream. Assume stream is UTF8
 {
     code_units=0;
 
-    uint8_t first_char;
+    int first_char;
     first_char=input_stream.get();
+    if(first_char==EOF)
+    {
+        //we have reached end-of-file.
+        //leave codepoint empty, hope someone catches it
+        return;
+    }
+    
     int NUNITS=NUnits(first_char);
     code_units=new uint8_t[NUNITS];
     code_units[0]=first_char;
+    
     int a=1;
     switch(NUNITS)
     {
@@ -169,6 +184,14 @@ code_point& code_point::operator=(const code_point& other)
     if (this != &other) // self-assignment check expected
     {
         int l=other.NUnits();
+        if(l==0)
+        {
+            if(code_units)
+                delete[] code_units;
+            code_units=0;
+            return *this;
+        }
+        
         if (NUnits() != l)/* storage cannot be reused (e.g. different sizes) */
         {
             if(code_units)
@@ -198,7 +221,7 @@ code_point& code_point::operator=(code_point&& other)
 const uint8_t code_point::operator[](uint8_t idx) const
 //accsess a code-point in the code-unit. throws a gen_exception if idx is out of range
 {
-    if(idx>NUnits())
+    if(idx>=NUnits())
     {
         throw gen_exception("index out of range");
     }
@@ -271,10 +294,15 @@ bool code_point::in(const utf8_string& data ) const
 }
 
 uint32_t code_point::to_UTF32() const
-//convert this charector to UTF32
+//convert this charector to UTF32. throw gen_exception if it is empty
 {
     uint32_t ret=0;
     int N_units=NUnits();
+    if(N_units==0)
+    {
+        throw gen_exception("cannot get UTF 8 value of empty code point");
+    }
+    
     uint8_t* source=code_units;
     //all cases fall through, on purpose.
     switch(N_units)
@@ -288,12 +316,35 @@ uint32_t code_point::to_UTF32() const
     return ret;
 }
 
+bool code_point::is_empty() const
+{
+    return code_units==0;
+}
+
+void code_point::put(std::ostream& out_stream)
+{
+    int L=NUnits();
+    if(L==0)
+    {
+        throw gen_exception("cannot send an empty code_point to a stream");
+    }
+    for(int i=0; i<L; i++)
+    {
+        out_stream.put(code_units[i]);
+    }
+}
+
 //end code_point methods
 //begin code_point friend functions
 
 std::ostream& csu::operator<<(std::ostream& os, const code_point& dt)
+//throws gen_exception if code_point is empty
 {
     int L=dt.NUnits();
+    if(L==0)
+    {
+        throw gen_exception("cannot send an empty code_point to a stream");
+    }
     for(int i=0; i<L; i++)
     {
         os<<dt.code_units[i];

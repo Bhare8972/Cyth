@@ -271,6 +271,8 @@ public:
     code_point stop;
     unsigned int new_state;
     
+    DFA_transition();
+    
     DFA_transition(const code_point& _start, const code_point& _stop); 
     //will raise a general exception if start is greater than stop
     
