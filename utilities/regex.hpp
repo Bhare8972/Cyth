@@ -271,6 +271,8 @@ public:
     code_point stop;
     unsigned int new_state;
     
+    DFA_transition();
+    
     DFA_transition(const code_point& _start, const code_point& _stop); 
     //will raise a general exception if start is greater than stop
     
@@ -327,6 +329,7 @@ public:
 std::list< std::shared_ptr<DFA_state> > NFA_to_DFA(const std::list< std::shared_ptr<NFA_state> >& NFA_states);
 DFA_automation compile_regex_DFA(std::list<utf8_string> patterns);
 std::list< std::shared_ptr<DFA_state> > DFA_minimization(const std::list< std::shared_ptr<DFA_state> >& _DFA_states);
+void increment_states(std::list< std::shared_ptr<NFA_state> >& states, uint incre);
 
 }//end namespace
 

@@ -24,7 +24,6 @@ logger class utility
 #include <iostream>
 #include <list>
 #include <sstream>
-#include <initializer_list>
 #include <string>
 
 
