@@ -22,7 +22,6 @@ this file is a set of utilities and a lexer, designed for lexing text files in U
 #include "UTF8.hpp"
 #include "gen_ex.h"
 #include "regex.hpp"
-#include "logger.hpp"
 
 #include <iostream>
 #include <fstream>
