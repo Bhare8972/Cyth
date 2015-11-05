@@ -114,7 +114,84 @@ public:
 };
 
 //tools used by the generator in making the parser table
+class token_data
+//holds data passed around by the parser
+{
+    unsigned int token_ID;
+    gen_holder token_data;
+    location_span span;
+public:
+    token_data(_ID, _data, _span);
+    
+    template<typename ret_T>
+    ret_T data();
+    
+    template<typename ret_T>
+    void data(ret_T& ret_data);
+    
+    location_span loc();
+    
+    unsigned int get_ID();
+};
 
+class production_info
+//contains data about a production. Used by parser for reporting info
+{
+    friend std::ostream& operator<<(std::ostream& os, const production_info& dt);
+public:
+    unsigned int L_val_ID;
+    utf8_string L_val_name;
+    unsigned int num_tokens;
+    std::function<token_data(std::vector<token_data>)> action;
+    
+    production_info(unsigned int _L_val_ID, utf8_string _L_val_name, unsigned int _num_tokens, std::function<token_data(std::vector<token_data>)> _action);
+};
+
+//classes used in processing the gramer
+class item;
+class item_set;
+class propagation_table;
+
+//classes to represent states in parser
+class parser_action
+{
+    friend std::ostream& operator<<(std::ostream& os, const parser_action& dt);
+private:
+    enum action_type
+    {
+        ERROR,
+        ACCEPT,
+        SHIFT,
+        REDUCE
+    };
+    
+    action_type action_todo;
+    unsigned int data;
+    
+    parser_action(action_type _todo, unsigned int _data);
+    
+public:
+    static parser_action get_error();
+    static parser_action get_accept();
+    static parser_action get_shift(unsigned int state);
+    static parser_action get_reduce(unsigned int production_ID);
+    
+    bool is_error();
+    bool is_accept();
+    bool is_shift();
+    bool is_reduce();
+    
+    unsigned int get_data();
+    
+    bool operator==(parser_action& RHS);
+};
+
+class parser_state
+{
+    
+public:
+    I AM HERE
+};
 
 }//end csu namespace
 #endif
