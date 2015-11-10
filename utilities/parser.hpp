@@ -282,12 +282,25 @@ typedef std::shared_ptr<item_set> item_set_ptr;
 class propagation_table
 {
 private:
-    typedef std::pair< item_set_ptr, item& >  PAIR_T;
+    typedef std::pair< item_set_ptr, item& >  FROM_T;
+    typedef std::pair< item_set_ptr, item& >  TO_T;
+    
+    class table_iterator
+    //a class for looping over returns from the table
+    {
+    public:
+        typedef std::multimap< FROM_T, TO_T >::iterator iterator;
+        pair<iterator, iterator> iters;
+        
+        table_iterator(pair<iterator, iterator>& _iters);
+        iterator& begin();
+        iterator& end();
+    };
 public:
-    std::multimap< PAIR_T, PAIR_T > table;
+    std::multimap< FROM_T, TO_T > table;
     
     void add_propagation(item_set_ptr from_set, item& from_item, item_set_ptr to_set, item& to_item);
-    //std::list<TO_T> get_propagation(item_set_ptr from_set, item& from_item);
+    table_iterator get_propagation(item_set_ptr from_set, item& from_item);
 };
 
 ///// parser_state /////
@@ -300,7 +313,8 @@ private:
         ERROR,
         ACCEPT,
         SHIFT,
-        REDUCE
+        REDUCE,
+        NONE
     };
     
     action_type action_todo;
@@ -309,6 +323,8 @@ private:
     parser_action(action_type _todo, unsigned int _data);
     
 public:
+
+    static parser_action get_none();
     static parser_action get_error();
     static parser_action get_accept();
     static parser_action get_shift(unsigned int state);
@@ -318,6 +334,7 @@ public:
     bool is_accept();
     bool is_shift();
     bool is_reduce();
+    bool is_none();
     
     unsigned int get_data();
     
@@ -330,13 +347,14 @@ class parser_state
     std::map<unsigned int, parser_action> >  ACTION; //on acceptance of a non-term, take an action
     parser_action default_action;
 public:
+    parser_state();
 
     void add_goto(unsigned int _token_ID, unsigned int _state);
     void add_action(unsigned int _non_term, parser_action _action);
     void set_default(parser_action _default);
     
     unsigned int get_goto(unsigned int _token_ID);
-    parser_function_ptr get_action(unsigned int non_term);
+    parser_action& get_action(unsigned int non_term);
     
 };
 
@@ -360,7 +378,7 @@ private:
     //the parse table information
     std::map<unsigned int, utf8_string> term_map; //map terminal ID to terminal name
     std::vector<production_info_ptr> production_information;
-    
+    std::vector<parser_state> state_table;
     
 public:
     parser_generator(utf8_string _parser_table_file_name, utf8_string _lexer_table_file_name);

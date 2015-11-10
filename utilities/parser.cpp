@@ -233,42 +233,6 @@ std::ostream& operator<<(std::ostream& os, const production_info& dt)
 
 //end production_info
 
-//start parser_action
-parser_action parser_action::get_error()
-{
-    return parser_action(ERROR, 0);
-}
-
-parser_action parser_action::get_accept()
-{
-    return parser_action(ACCEPT, 0);
-}
-
-parser_action parser_action::get_shift(unsigned int state)
-{
-    return parser_action(SHIFT, state);
-}
-
-parser_action parser_action::get_reduce(unsigned int production_ID)
-{
-    return parser_action(REDUCE, production_ID);
-}
-
-bool parser_action::is_error(){return action_todo==ERROR;}
-bool parser_action::is_shift(){return action_todo==SHIFT;}
-bool parser_action::is_accept(){return action_todo==ACCEPT;}
-bool parser_action::is_reduce(){return action_todo==REDUCE;}
-
-unsigned int parser_action::get_data()
-{
-    return data;
-}
-bool parser_action::operator==(parser_action& RHS)
-{
-    return action_todo==RHS.action_todo and data==RHS.data;
-}
-//end parser_action
-
 // start item class
 item::item(std::shared_ptr<production> _prod, unsigned int _loc)
 {
@@ -437,16 +401,87 @@ ostream& operator<<(std::ostream& os, const item_set& dt)
 //end item_set
 
 //start propagation_table
+void table_iterator::table_iterator(pair<table_iterator::iterator, table_iterator::iterator>& _iters)
+{
+    iters=_iters;
+}
+
+table_iterator::iterator& table_iterator::begin()
+{
+    return iters.first();
+}
+
+table_iterator::iterator& table_iterator::end()
+{
+    return iters.second();
+}
+
 void propagation_table::add_propagation(item_set_ptr from_set, item& from_item, item_set_ptr to_set, item& to_item)
 {
-    PAIR_T from_pair(from_set, from_item);
-    PAIR_T to_pair(to_set, to_item);
+    FROM_T from_pair(from_set.id, from_item);
+    TO_T to_pair(to_set, to_item);
     
     table.insert(make_pair(from_pair, to_pair));
 }
+
+void propagation_table::table_iterator propagation_table::get_propagation(item_set_ptr from_set, item& from_item)
+{
+    FROM_T from_pair(from_set.id, from_item);
+    table_iterator ret( table.equal_range(from_pair) );
+    return ret;
+}
+
 //end propagation_table
 
+
+//start parser_action
+parser_action parser_action::get_error()
+{
+    return parser_action(ERROR, 0);
+}
+
+parser_action parser_action::get_accept()
+{
+    return parser_action(ACCEPT, 0);
+}
+
+parser_action parser_action::get_shift(unsigned int state)
+{
+    return parser_action(SHIFT, state);
+}
+
+parser_action parser_action::get_reduce(unsigned int production_ID)
+{
+    return parser_action(REDUCE, production_ID);
+}
+
+parser_action parser_action::get_none()
+{
+    return parser_action(NONE, 0);
+}
+
+bool parser_action::is_error(){return action_todo==ERROR;}
+bool parser_action::is_shift(){return action_todo==SHIFT;}
+bool parser_action::is_accept(){return action_todo==ACCEPT;}
+bool parser_action::is_reduce(){return action_todo==REDUCE;}
+bool parser_action::is_none(){return action_todo==NONE;}
+
+unsigned int parser_action::get_data()
+{
+    return data;
+}
+bool parser_action::operator==(parser_action& RHS)
+{
+    return action_todo==RHS.action_todo and data==RHS.data;
+}
+//end parser_action
+
 //start parser_state class
+parser_state::parser_state()
+{
+    default_action=get_error();
+}
+
 void parser_state::add_goto(unsigned int _token_ID, unsigned int _state)
 {
     GOTO[_token_ID]==_state;
@@ -464,12 +499,21 @@ void parser_state::set_default(parser_action _default)
 
 unsigned int parser_state::get_goto(unsigned int _token_ID)
 {
+    //do we need to check to see if _token_ID exists?
     return GOTO[_token_ID];
 }
 
-parser_function_ptr parser_state::get_action(unsigned int non_term)
+parser_action& parser_state::get_action(unsigned int non_term)
 {
-    return ACTION[non_term]
+    auto iter=ACTION.find(non_term);
+    if(iter==ACTION.end())
+    {
+        return default_action();
+    }
+    else
+    {
+        return *iter;
+    }
 }
 //end parser_state
 
@@ -1027,133 +1071,197 @@ void parser_generator::generate_parser_table()
     
     //propagate lookahead items to form all LALR(1) items
     bool items_added=true;
-    I AM HERE
-}
-            
-                        
-        ##propagate lookahead items to form all LALR(1) items
-        items_added=True
-        while items_added: <- IS HERE
-            items_added=False
-            
-            for  LR1set in LR1_item_sets:
-                LR0_set=LR0_item_sets[ LR1set.id ]
-                for LR1item in LR1set:
-                    LR0item=LR1item.copy(None)
-                    propagate_to=prop_table.get_propagations(LR0_set,LR0item )
-                    for to_set, to_item in propagate_to:
-                        new_to_item=to_item.copy( LR1item.lookahead )
-                        if new_to_item not in to_set:
-                            to_set.append(new_to_item)
-                            items_added=True
-                
+    while(items_added)
+    {
+        items_added=false;
+        for(auto LR1set : LR1_item_sets)
+        {
+            item_set_ptr LR0set=find_if(LR0_item_sets.begin(), LR0_item_sets.end(), [](const item_set_ptr A ){A->id==LR1_set->id;});
+            for(item& LR1item : LR1set)
+            {
+                item LR0item=LR1item.copy( token_ptr() );
+                for(auto& to_setitem_pair : prop_table.get_propagation(LR0set, LR0item )
+                {
+                    item new_to_item=to_setitem_pair.second().copy( LR1item.lookahead );
+                    if(not to_setitem_pair.first()->has_item(new_to_item) )
+                    {
+                        to_setitem_pair.first()->append(new_to_item);
+                        items_added=true;
+                    }
+                }
+            }
+        }
+    }
+    
+    
+    //closure on each set of items to get the non-kernal items
+    for( auto set : LR1_item_sets ) closure_LR1(set);
+    
+    //generate table using algorithm 4.56
+    state_table.resize(LR1_item_sets.size());
+    item accept_item(*augmented_start->productions.begin(), 1, EOF_terminal);
+    bool is_ambiguous=false;
+    for( unsigned int state_i=0; i<LR1_item_sets.size(), i++)
+    {
+        parser_state& current_state=state_table[state_i];
+        auto set=LR1_item_sets[state_i];
         
-        ##closure on each set of items to get non-kernal items
-        [ self.closure_LR1(set) for set in LR1_item_sets ]
-
-        ##generate table using algoritm 4.56
-        self.states=[ state() for x in LR1_item_sets] ## a state for each item set
-        accept_item=item(augmented_start.productions[0], 1, self.EOF_terminal)
-        is_ambiguous=False
-        for state_i in xrange(len(self.states)):
-            current_state=self.states[state_i]
-            set=LR1_item_sets[state_i]
-            ##set the actions
-            new_action=None
-            action_items={}
-            for set_item in set:
-                post_tokens=set_item.get_postTokens()
-                if set_item==accept_item:
-                    ##accept
-                    new_action=action.accept()
-                    action_token=self.EOF_terminal
-                elif len(post_tokens)==0 and set_item.lookahead.is_terminal:
-                    ##reduce
-                    new_action=action.reduce(set_item.production.id)
-                    action_token=set_item.lookahead
-                elif post_tokens[0].is_terminal:
-                    ##shift
-                    set_to_shift_to=set.goto(post_tokens[0])
-                    new_action=action.shift(set_to_shift_to.id)
-                    action_token=post_tokens[0]
-                
-                if new_action:
-                    tmp_ambiguous=False
-                    ##check for conflicts
-                    old_action=current_state.action(action_token.id)
-                    if (not old_action.is_error()) and not old_action==new_action:
-                        tmp_ambiguous=True
-                        ##check to see if conflict can be solved by associativity and precidance
-                        if (old_action.is_shift() and new_action.is_reduce()) or (new_action.is_shift() and old_action.is_reduce()): ##make sure we have a shift-reduce conflict
-                            ##order the shift and reduce actions
-                            if old_action.is_shift():
-                                shift_action=old_action
-                                reduce_action=new_action
-                                reduce_item=set_item
-                                shift_item=action_items[action_token.id]
-                            else:
-                                shift_action=new_action,
-                                reduce_action=old_action
-                                shift_item=set_item
-                                reduce_item=action_items[action_token.id]
-                                
-                            if reduce_item.production==shift_item.production: ##try associativity
-                                if reduce_item.production.assoc=='left':
-                                    new_action=reduce_action
-                                    set_item=reduce_item
-                                    tmp_ambiguous=False
-                                elif reduce_item.production.assoc=='right':
-                                    new_action=shift_action
-                                    set_item=shift_item
-                                    tmp_ambiguous=False
-                                    
-                            elif (reduce_item.production in self.opperator_precedence) and (shift_item.production in self.opperator_precedence): ##try precidance
-                                reduce_index=self.opperator_precedence.index(reduce_item.production)
-                                shift_index=self.opperator_precedence.index(shift_item.production)
-                                if shift_index<reduce_index:
-                                    new_action=shift_action
-                                    set_item=shift_item
-                                    tmp_ambiguous=False
-                                elif reduce_index<shift_index:
-                                    new_action=reduce_action
-                                    set_item=reduce_item
-                                    tmp_ambiguous=False
-                                    
-                        if tmp_ambiguous:
-                            ##not able to resolve ambiguity
-                            log("AMBIGUOUS GRAMMER in state ",state_i,". conflict between action: ", old_action,
-                                " on item:",action_items[action_token.id], ", and action: ",new_action," on item:",set_item)
-                            is_ambiguous=True ##we do not return here, becouse we want to list out all ambiguities
+        //set the actions
+        parser_action new_action=parser_action::get_none(); //I am not sure why this is here, and not up one level. Has something to do with ambiguity checking
+        //action_items
+        AM HERE. MAKE ACTION_ITEMS
+        for(item& set_item : set)
+        {
+            auto post_tokens=set_item.get_postTokens();
+            token_ptr action_token;
+            if(set_item==accept_item)
+            {
+                //accept
+                new_action=parser_action::get_accept();
+                action_token=EOF_terminal;
+            }
+            else if( post_tokens.size()==0 and set_item.lookahead->is_terminal )
+            {
+                //reduce
+                new_action=parser_action::get_reduce(set_item.production->id);
+                action_token=set_item.lookahead;
+            }
+            else if( (*post_tokens.begin())->is_terminal)
+            {
+                //shift
+                auto set_shift_to=set->get_goto( (*post_tokens.begin()) );
+                new_action=parser_action::get_shift(set_shift_to->id);
+                action_token=(*post_tokens.begin())
+            }
+            
+            if(not new_action.is_none() ) //the action was set
+            {
+                bool tmp_ambiguous=false;
+                //check for conflicts
+                parser_action& old_action=current_state.action(action_token->id);
+                if( (not old_action.is_error()) and (not old_action==new_action) )
+                //the actions are ambiguous
+                {
+                    tmp_ambiguous=true;
+                    //check to see if ambiguitiy can be solved with precendance or associativvity
+                    bool is_shiftReduce = old_action.is_shift() and new_action.is_reduce();
+                    bool is_reduceShift = old_action.is_reduce() and new_action.is_shift();
+                    if( is_shiftReduce or is_reduceShift)//check for a shift-reduce conflict
+                    {
+                        parser_action shift_action=parser_action::get_none();
+                        parser_action reduce_action=parser_action::get_none();
+                        item shift_item;
+                        item reduce_item;
+                        //order the shift-reduce acctions
+                        if(old_action.is_shift())
+                        {
+                            shift_action=old_action;
+                            reduce_action=new_action;
+                            reduce_item=set_item;
+                            shift_item=action_items[action_token->id];
+                        }
+                        I AM HERE
+                        
+                    }
                     
-                    if not tmp_ambiguous:
-                        current_state.add_action(action_token.id, new_action)
-                        action_items[action_token.id]=set_item
-                        
-            ##set the goto table
-            for nonterm in self.nonterms:
-                goto=set.goto(nonterm)
-                if goto:
-                    current_state.add_goto(nonterm.id, goto.id)
-        
-        ##log action table
-        log()
-        for state_i in xrange(len(self.states)):
-            log('STATE: ',state_i)
-            log()
-            for ST_item in LR1_item_sets[state_i].items:
-                log('  ', ST_item)
-            log()
-            for term_id, token_action in self.states[state_i].ACTION.iteritems():
-                log('  on ',self.term_map[term_id],' ',token_action)
-            log()
-            for nonterm_id, goto_state in self.states[state_i].GOTO.iteritems():
-                log('  goto ',goto_state,' on ',nonterm_map[nonterm_id])
-            log()
+                }
+            }
             
+        }
+    }
+    
+}
+
+    ##generate table using algoritm 4.56
+    self.states=[ state() for x in LR1_item_sets] ## a state for each item set
+    accept_item=item(augmented_start.productions[0], 1, self.EOF_terminal)
+    is_ambiguous=False
+    for state_i in xrange(len(self.states)):
+        current_state=self.states[state_i]
+        set=LR1_item_sets[state_i]
+        ##set the actions
+        new_action=None
+        action_items={}
+        for set_item in set:
+......................................................
+            
+            if new_action:
+                tmp_ambiguous=False
+                ##check for conflicts
+                old_action=current_state.action(action_token.id)
+                if (not old_action.is_error()) and not old_action==new_action:
+                    tmp_ambiguous=True
+                    ##check to see if conflict can be solved by associativity and precidance
+                    if (old_action.is_shift() and new_action.is_reduce()) or (new_action.is_shift() and old_action.is_reduce()): ##make sure we have a shift-reduce conflict
+                        ##order the shift and reduce actions
+                        if old_action.is_shift():
+                            shift_action=old_action
+                            reduce_action=new_action
+                            reduce_item=set_item
+                            shift_item=action_items[action_token.id] <- is here
+                        else:
+                            shift_action=new_action,
+                            reduce_action=old_action
+                            shift_item=set_item
+                            reduce_item=action_items[action_token.id]
+                            
+                        if reduce_item.production==shift_item.production: ##try associativity
+                            if reduce_item.production.assoc=='left':
+                                new_action=reduce_action
+                                set_item=reduce_item
+                                tmp_ambiguous=False
+                            elif reduce_item.production.assoc=='right':
+                                new_action=shift_action
+                                set_item=shift_item
+                                tmp_ambiguous=False
+                                
+                        elif (reduce_item.production in self.opperator_precedence) and (shift_item.production in self.opperator_precedence): ##try precidance
+                            reduce_index=self.opperator_precedence.index(reduce_item.production)
+                            shift_index=self.opperator_precedence.index(shift_item.production)
+                            if shift_index<reduce_index:
+                                new_action=shift_action
+                                set_item=shift_item
+                                tmp_ambiguous=False
+                            elif reduce_index<shift_index:
+                                new_action=reduce_action
+                                set_item=reduce_item
+                                tmp_ambiguous=False
+                                
+                    if tmp_ambiguous:
+                        ##not able to resolve ambiguity
+                        log("AMBIGUOUS GRAMMER in state ",state_i,". conflict between action: ", old_action,
+                            " on item:",action_items[action_token.id], ", and action: ",new_action," on item:",set_item)
+                        is_ambiguous=True ##we do not return here, becouse we want to list out all ambiguities
+                
+                if not tmp_ambiguous:
+                    current_state.add_action(action_token.id, new_action)
+                    action_items[action_token.id]=set_item
+                    
+        ##set the goto table
+        for nonterm in self.nonterms:
+            goto=set.goto(nonterm)
+            if goto:
+                current_state.add_goto(nonterm.id, goto.id)
+    
+    ##log action table
+    log()
+    for state_i in xrange(len(self.states)):
+        log('STATE: ',state_i)
+        log()
+        for ST_item in LR1_item_sets[state_i].items:
+            log('  ', ST_item)
+        log()
+        for term_id, token_action in self.states[state_i].ACTION.iteritems():
+            log('  on ',self.term_map[term_id],' ',token_action)
+        log()
+        for nonterm_id, goto_state in self.states[state_i].GOTO.iteritems():
+            log('  goto ',goto_state,' on ',nonterm_map[nonterm_id])
+        log()
+        
 #        if is_ambiguous:
 #            return
-                        
-        ##compact action table
+                    
+    ##compact action table
 #        for current_state in self.states:
 #            reduce_action=None
 #            to_remove=[]
@@ -1168,10 +1276,10 @@ void parser_generator::generate_parser_table()
 #                current_state.default_action=reduce_action
 #            for rem in to_remove:
 #                del current_state.ACTION[rem]
-                
-                        
-        ##compact goto table (see pg 276-277) 
-                        
-        self.parser_info_generated=True
+            
+                    
+    ##compact goto table (see pg 276-277) 
+                    
+    self.parser_info_generated=True
 
 //end parser_generator class
