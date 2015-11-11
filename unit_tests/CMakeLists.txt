@@ -17,8 +17,10 @@ add_executable(CSU_unit_tests
               ./UTF8_test.cpp
               ./type_erasure_test.cpp
               ./lexer_test.cpp
+              ./parser_test.cpp
               ${utils}/lexer.cpp
               ${utils}/regex.cpp
-              ${utils}/UTF8.cpp)
+              ${utils}/UTF8.cpp
+              ${utils}/parser.cpp)
               
           

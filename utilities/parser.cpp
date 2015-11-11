@@ -49,21 +49,21 @@ terminal::terminal(utf8_string _name, unsigned int ID, parser_generator* _par_ge
     par_gen=_par_gen;
 }
 
-void add_pattern(utf8_string pattern, bool return_data=true)
+void terminal::add_pattern(utf8_string pattern, bool return_data)
 {
-    lexer_function_generic new_lex_func(token_ID, return_data)
+    lexer_function_generic new_lex_func(token_ID, return_data);
     par_gen->add_lexer_pattern(pattern, new_lex_func);
 }
 
 template<typename ret_type>
-void add_pattern(utf8_string pattern, function<ret_type(utf8_string, lexer<token_data>*)> _func)
+void terminal::add_pattern(utf8_string pattern, function<ret_type(utf8_string, lexer<token_data>*)> _func)
 {
     lexer_functional<ret_type> new_lex_func(token_ID, _func);
     par_gen->add_lexer_pattern(pattern, new_lex_func);
 }
 
 template<typename ret_type>
-void add_patterns(initializer_list<utf8_string> patterns, function<ret_type(utf8_string, lexer<token_data>*)> _func)
+void terminal::add_patterns(initializer_list<utf8_string> patterns, function<ret_type(utf8_string, lexer<token_data>*)> _func)
 {
     lexer_functional<ret_type> new_lex_func(token_ID, _func);
     for(auto& pattern : patterns)
@@ -84,42 +84,23 @@ non_terminal::non_terminal(utf8_string _name, unsigned int ID, parser_generator*
 
 production& non_terminal::add_production(std::initializer_list<token_ptr> tokens)
 {
-    std_vector<token_ptr> _tokens(tokens);
+    vector<token_ptr> _tokens(tokens);
     //check for unknown tokens
     for(token_ptr _token : _tokens)
     {
         if(_token->token_ID==0)//found an unknown token
         {
-            _par_gen->resolve_unknown_terminal(_token);//make it known
+            par_gen->resolve_unknown_terminal(_token);//make it known
         }
     }
     //make the new production
-    std::shared_ptr< production > new_production(new production(this, _tokens);
+    std::shared_ptr< production > new_production(new production(this, _tokens));
     productions.push_back(new_production);
     return *new_production.get();
 }
 //end non_terminal class
 
 //start token_data class
-class token_data
-//holds data passed around by the parser
-{
-    unsigned int token_ID;
-    dyn_holder t_data;
-    location_span span;
-public:
-    token_data(_ID, _data, _span);
-    
-    template<typename ret_T>
-    ret_T data();
-    
-    template<typename ret_T>
-    void data(ret_T& ret_data);
-    
-    location_span loc();
-    
-    unsigned int get_ID();
-};
 
 token_data::token_data(unsigned int _ID, dyn_holder _data, location_span _span)
 {
@@ -147,6 +128,7 @@ unsigned int token_data::get_ID(){return token_ID;}
 
 // production
 production::next_production_ID=0;
+production::next_precedence_level=1;
 production::production(non_terminal* _L_val, std::vector<token_ptr>& _tokens)
 {
     L_val=_L_val;
@@ -154,10 +136,11 @@ production::production(non_terminal* _L_val, std::vector<token_ptr>& _tokens)
     production_ID=next_production_ID;
     next_production_ID++;
     _assoc=NONE;
+    precedence=0;
 }
 
 template<typename ret_type>
-production& production::action(std::function<ret_type(std::vector<token_data>&)> _func)
+production& production::set_action(std::function<ret_type(std::vector<token_data>&)> _func)
 {
     parser_function_ptr new_parser_func(new parser_functional<ret_type> new_parser_func(_func));
     action=new_parser_func
@@ -165,13 +148,13 @@ production& production::action(std::function<ret_type(std::vector<token_data>&)>
     
 }
 
-production& production::assoc(association _assoc)
+production& production::set_associativity(association _assoc)
 {
     assoc=_assoc;
     return *this;
 }
 
-production& production::assoc(utf8_string _assoc)
+production& production::set_associativity(utf8_string _assoc)
 {
     if(_assoc=="NONE")
     {
@@ -190,6 +173,12 @@ production& production::assoc(utf8_string _assoc)
         throw gen_exception("unknown production association");
     }
     return &this;
+}
+
+production& production::set_precedence()
+{
+    precedence=next_precedence_level;
+    next_precedence_level++;
 }
 
 production_info production::get_info()
@@ -474,6 +463,31 @@ bool parser_action::operator==(parser_action& RHS)
 {
     return action_todo==RHS.action_todo and data==RHS.data;
 }
+
+ostream& operator<<(ostream& os, const parser_action& dt)
+{
+    if(dt.is_accept())
+    {
+        os<<"accept";
+    }
+    else if(dt.is_shift())
+    {
+        os<<"shift to "<<dt.get_data();
+    }
+    else if(dt.is_reduce())
+    {
+        os<<"reduce by "<<dt.get_data();
+    }
+    else if(dt.is_error())
+    {
+        os<<"error";
+    }
+    else
+    {
+        os<<"no action";
+    }
+}
+
 //end parser_action
 
 //start parser_state class
@@ -588,12 +602,6 @@ non_terminal_ptr parser_generator::new_nonterminal(utf8_string name)
 void parser_generator::set_start_nonterm(non_terminal_ptr _start_nonterm)
 {
     start_nonterm=_start_nonterm;
-}
-
-void set_precedence(std::initializer_list<non_terminal_ptr> operators)
-{
-    //need to fill this in
-    throw gen_exception("not implemented");
 }
 
 void parser_generator::print_grammer()
@@ -906,8 +914,6 @@ list<item_set_ptr> parser_generator::LR0_itemsets(non_terminal_ptr _start_token)
     return item_sets;
 }
 
-NEED TO SOLVE EPSILON PROBLEM
-
 void parser_generator::generate_parser_table()
 {
     logger log();
@@ -923,10 +929,11 @@ void parser_generator::generate_parser_table()
     ////basic accounting////
     //terminal map
     log("terminals:");
+    term_map= shared_ptr< map<unsigned int, utf8_string> >( new map<unsigned int, utf8_string>());
     for(auto name_term_pair : terminals)
     {
         log(name_term_pair.second()->token_ID, ": ", name_term_pair->first());
-        term_map[name_term_pair.second()->token_ID]=name_term_pair->first();
+        *term_map[name_term_pair.second()->token_ID]=name_term_pair->first();
     }
     log();
     
@@ -947,13 +954,14 @@ void parser_generator::generate_parser_table()
     
     //set production information    
     log("grammer productions:");
-    production_information.resize(num_productions);
+    production_information=shared_ptr< vector<production_info_ptr> >( new vector<production_info_ptr>() );
+    production_information->resize(num_productions);
     for(auto name_nonterm_pair : nonterminals)
     {
         for(auto prod : name_nonterm_pair.second()->productions)
         {
             log(prod->id, ': ', prod);
-            production_information[prod->id]=prod.get_info();
+            *production_information[prod->id]=prod.get_info();
         }
     }
     log();
@@ -1098,18 +1106,18 @@ void parser_generator::generate_parser_table()
     for( auto set : LR1_item_sets ) closure_LR1(set);
     
     //generate table using algorithm 4.56
-    state_table.resize(LR1_item_sets.size());
+    state_table=shared_ptr< vector<parser_state> >( new vector<parser_state>() );
+    state_table->resize(LR1_item_sets.size());
     item accept_item(*augmented_start->productions.begin(), 1, EOF_terminal);
     bool is_ambiguous=false;
     for( unsigned int state_i=0; i<LR1_item_sets.size(), i++)
     {
-        parser_state& current_state=state_table[state_i];
+        parser_state& current_state=*state_table[state_i];
         auto set=LR1_item_sets[state_i];
         
         //set the actions
         parser_action new_action=parser_action::get_none(); //I am not sure why this is here, and not up one level. Has something to do with ambiguity checking
-        //action_items
-        AM HERE. MAKE ACTION_ITEMS
+        map<unsigned int, item> action_items;
         for(item& set_item : set)
         {
             auto post_tokens=set_item.get_postTokens();
@@ -1156,130 +1164,109 @@ void parser_generator::generate_parser_table()
                         if(old_action.is_shift())
                         {
                             shift_action=old_action;
+                            shift_item=action_items[action_token->id];
                             reduce_action=new_action;
                             reduce_item=set_item;
-                            shift_item=action_items[action_token->id];
                         }
-                        I AM HERE
+                        else
+                        {
+                            shift_action=new_action;
+                            shift_item=set_item;
+                            reduce_action=old_action;
+                            reduce_item=action_items[action_token->id];
+                        }
                         
+                        if(reduce_item.prod->id == shift_item.prod->id) //try associatitivy
+                        {
+                            if(reduce_item.prod->is_left_associative()) //reduce
+                            {
+                                new_action=reduce_action;
+                                set_item=reduce_item;
+                                tmp_ambiguous=false;
+                            }
+                            else if(reduce_item.prod->is_right_associative())//shift
+                            {
+                                new_action=shift_action;
+                                set_item=shift_item;
+                                tmp_ambiguous=false;
+                            }
+                        }
+                        else if(reduce_item.prod->precedence!=0 and shift_item.prod->precedence!=0) //try precedence
+                        {
+                            if(reduce_item.prod->precedence < shift_item.prod->precedence) //reduce
+                            {
+                                new_action=reduce_action;
+                                set_item=reduce_item;
+                                tmp_ambiguous=false;
+                            }
+                            else if(reduce_item.prod->precedence > shift_item.prod->precedence)//shift
+                            {
+                                new_action=shift_action;
+                                set_item=shift_item;
+                                tmp_ambiguous=false;
+                            }
+                        }
                     }
                     
+                    if(tmp_ambiguous)
+                    //the grammer is ambiguous
+                    {
+                        log("AMBIGUOUS GRAMMER in state ",state_i,". conflict between action: ", old_action,
+                            " on item:",action_items[action_token.id], ", and action: ",new_action," on item:",set_item)
+                        is_ambiguous=true //we do not return here, becouse we want to list out all ambiguities
+                    }
+                }
+                
+                if(not tmp_ambiguous)
+                {
+                    current_state.add_action(action_token->token_ID, new_action);
                 }
             }
-            
+        }
+        
+        //set the goto table
+        for(auto& name_nonterm_pair : non_terminals)
+        {
+            auto goto_set = set.get_goto(name_nonterm_pair.second());
+            if(goto_set) current_state.add_goto(name_nonterm_pair.second()->token_ID, goto_set->id);
         }
     }
     
+    
+    //log the action table
+    log();
+    for( unsigned int state_i=0; i<LR1_item_sets.size(), i++)
+    {
+        parser_state& current_state=*state_table[state_i];
+        log("STATE: ", state_i);
+        log();
+        
+        for( auto& ST_item : LR1_item_sets[state_i]->items)
+        {
+            log("  ", ST_item);
+        }
+        log();
+        
+        for(auto&  id_action_pair : current_state.ACTION )
+        {
+            log("  on ", *term_map[id_action_pair.first()], " ", id_action_pair.second());
+        }
+        log();
+        
+        for(auto& nonterm_state_pair in current_state.GOTO)
+        {
+            log("  goto ", nonterm_state_pair.second(), " on ", nonterm_map[nonterm_state_pair.first()]);
+        }
+        log();
+    }
+    
+    if( is_ambiguous) return;
+    
+    //compact action table
+    //compact goto table (see pg 276-277)
+    
+    parser_table_generated=true;
 }
 
-    ##generate table using algoritm 4.56
-    self.states=[ state() for x in LR1_item_sets] ## a state for each item set
-    accept_item=item(augmented_start.productions[0], 1, self.EOF_terminal)
-    is_ambiguous=False
-    for state_i in xrange(len(self.states)):
-        current_state=self.states[state_i]
-        set=LR1_item_sets[state_i]
-        ##set the actions
-        new_action=None
-        action_items={}
-        for set_item in set:
-......................................................
-            
-            if new_action:
-                tmp_ambiguous=False
-                ##check for conflicts
-                old_action=current_state.action(action_token.id)
-                if (not old_action.is_error()) and not old_action==new_action:
-                    tmp_ambiguous=True
-                    ##check to see if conflict can be solved by associativity and precidance
-                    if (old_action.is_shift() and new_action.is_reduce()) or (new_action.is_shift() and old_action.is_reduce()): ##make sure we have a shift-reduce conflict
-                        ##order the shift and reduce actions
-                        if old_action.is_shift():
-                            shift_action=old_action
-                            reduce_action=new_action
-                            reduce_item=set_item
-                            shift_item=action_items[action_token.id] <- is here
-                        else:
-                            shift_action=new_action,
-                            reduce_action=old_action
-                            shift_item=set_item
-                            reduce_item=action_items[action_token.id]
-                            
-                        if reduce_item.production==shift_item.production: ##try associativity
-                            if reduce_item.production.assoc=='left':
-                                new_action=reduce_action
-                                set_item=reduce_item
-                                tmp_ambiguous=False
-                            elif reduce_item.production.assoc=='right':
-                                new_action=shift_action
-                                set_item=shift_item
-                                tmp_ambiguous=False
-                                
-                        elif (reduce_item.production in self.opperator_precedence) and (shift_item.production in self.opperator_precedence): ##try precidance
-                            reduce_index=self.opperator_precedence.index(reduce_item.production)
-                            shift_index=self.opperator_precedence.index(shift_item.production)
-                            if shift_index<reduce_index:
-                                new_action=shift_action
-                                set_item=shift_item
-                                tmp_ambiguous=False
-                            elif reduce_index<shift_index:
-                                new_action=reduce_action
-                                set_item=reduce_item
-                                tmp_ambiguous=False
-                                
-                    if tmp_ambiguous:
-                        ##not able to resolve ambiguity
-                        log("AMBIGUOUS GRAMMER in state ",state_i,". conflict between action: ", old_action,
-                            " on item:",action_items[action_token.id], ", and action: ",new_action," on item:",set_item)
-                        is_ambiguous=True ##we do not return here, becouse we want to list out all ambiguities
-                
-                if not tmp_ambiguous:
-                    current_state.add_action(action_token.id, new_action)
-                    action_items[action_token.id]=set_item
-                    
-        ##set the goto table
-        for nonterm in self.nonterms:
-            goto=set.goto(nonterm)
-            if goto:
-                current_state.add_goto(nonterm.id, goto.id)
-    
-    ##log action table
-    log()
-    for state_i in xrange(len(self.states)):
-        log('STATE: ',state_i)
-        log()
-        for ST_item in LR1_item_sets[state_i].items:
-            log('  ', ST_item)
-        log()
-        for term_id, token_action in self.states[state_i].ACTION.iteritems():
-            log('  on ',self.term_map[term_id],' ',token_action)
-        log()
-        for nonterm_id, goto_state in self.states[state_i].GOTO.iteritems():
-            log('  goto ',goto_state,' on ',nonterm_map[nonterm_id])
-        log()
-        
-#        if is_ambiguous:
-#            return
-                    
-    ##compact action table
-#        for current_state in self.states:
-#            reduce_action=None
-#            to_remove=[]
-#            for token_id,token_action in current_state.ACTION.iteritems():
-#                if token_action.is_reduce():
-#                    to_remove.append(token_id)
-#                    if reduce_action==None:
-#                        reduce_action=token_action
-#                    elif not reduce_action==token_action:
-#                        print "ERROR: different reduces in same state:", current_state.
-#            if reduce_action != None:
-#                current_state.default_action=reduce_action
-#            for rem in to_remove:
-#                del current_state.ACTION[rem]
-            
-                    
-    ##compact goto table (see pg 276-277) 
-                    
-    self.parser_info_generated=True
 
 //end parser_generator class

@@ -25,6 +25,7 @@ this file is a set of utilities and a lexer, designed for lexing text files in U
 
 #include <iostream>
 #include <fstream>
+#include <sstream>
 #include <functional>
 #include <initializer_list>
 #include <memory>

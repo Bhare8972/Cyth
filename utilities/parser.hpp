@@ -36,15 +36,34 @@ namespace csu{ //cyth standard utilities namespace
 
 ///// foward declarations /////
 
-class token_data; //pre-declare a class that will eventualy hold data about a token
-//will hold a token_ID, data, and a location
-
 class parser_generator; //pre-declare the parser-generator
 
 class production; //productions show how to get from a list of terminals to a non-terminal...ish
 class production_info;//hold data from a production, for the final parser
 
 class parser;
+
+///// token data /////
+
+class token_data
+//holds data passed around by the parser
+{
+    unsigned int token_ID;
+    dyn_holder t_data;
+    location_span span;
+public:
+    token_data(unsigned int _ID, dyn_holder _data, location_span _span);
+    
+    template<typename ret_T>
+    ret_T data();
+    
+    template<typename ret_T>
+    void data(ret_T& ret_data);
+    
+    location_span loc();
+    
+    unsigned int get_ID();
+};
 
 ///// functionals /////
 
@@ -56,7 +75,7 @@ public:
 };
 typedef std::shared_ptr<parser_function_class> parser_function_ptr;
 
-typedef<typename return_T>
+template<typename return_T>
 class parser_functional : parser_function_class
 //inherits from parser_action_class to wrap around std::function
 {
@@ -87,12 +106,12 @@ public:
     {
         lex->continue_lexing(return_data);
         dyn_holder new_data(data);
-        token_data ret(teminal_ID, new_data, loc);
+        token_data ret(terminal_ID, new_data, loc);
         return ret;
     }
 };
     
-template<typedef ret_type>
+template<typename ret_type>
 class lexer_functional: public lexer_function_class
 {
     std::function<ret_type(utf8_string, lexer<token_data>*)> func;
@@ -100,14 +119,14 @@ class lexer_functional: public lexer_function_class
 public:
     lexer_functional(unsigned int _ID, std::function<ret_type(utf8_string, lexer<token_data>*)> _func)
     {
-        teminal_ID=_ID;
+        terminal_ID=_ID;
         func=_func;
     }
 
     virtual token_data operator()( utf8_string& data, location_span& loc, lexer<token_data>* lex)
     {
         dyn_holder new_data( func(data, lex) );
-        token_data ret(teminal_ID, new_data, loc);
+        token_data ret(terminal_ID, new_data, loc);
         return ret;
     }
 };
@@ -124,6 +143,7 @@ public:
     bool is_terminal;
     unsigned int token_ID; //starts at 1. 0 means "unknown"
     
+    token(){}
     token(utf8_string _name); //new unknown terminal
     
     //extra constructors are not needed, as mostly derived classes will be used
@@ -161,26 +181,6 @@ public:
 };
 typedef std::shared_ptr<non_terminal> non_terminal_ptr;
 
-class token_data
-//holds data passed around by the parser
-{
-    unsigned int token_ID;
-    dyn_holder t_data;
-    location_span span;
-public:
-    token_data(unsigned int _ID, dyn_holder _data, location_span _span);
-    
-    template<typename ret_T>
-    ret_T data();
-    
-    template<typename ret_T>
-    void data(ret_T& ret_data);
-    
-    location_span loc();
-    
-    unsigned int get_ID();
-};
-
 ///// productions //////
 
 class production
@@ -189,6 +189,7 @@ class production
 private:
     friend std::ostream& operator<<(std::ostream& os, const production& dt);
     static unsigned int next_production_ID;
+    static unsigned int next_precedence_level;
 public:
    enum association
    {
@@ -202,16 +203,21 @@ public:
     std::vector<token_ptr> tokens;
     parser_function_ptr action;
     association _assoc;
+    unsigned int precedence; //lower number means higher precedence. Highist precedence is 1. 0 is no-precedence.
     
     production(non_terminal* _L_val, std::vector<token_ptr>& _tokens);
     
     template<typename ret_type>
-    production& action(std::function<ret_type(std::vector<token_data>&)> _func);
+    production& set_action(std::function<ret_type(std::vector<token_data>&)> _func);
     
-    production& assoc(association _assoc);
-    production& assoc(utf8_string _assoc); //will convert a utf8_string into one of the three associations
+    production& set_associativity(association _assoc);
+    production& set_associativity(utf8_string _assoc); //will convert a utf8_string into one of the three associations
+    production& set_precedence();//productions where this is set first will have a higher precedence
     
     production_info get_info();
+    
+    bool is_left_associative();
+    bool is_right_associative();
 };
 
 
@@ -290,9 +296,9 @@ private:
     {
     public:
         typedef std::multimap< FROM_T, TO_T >::iterator iterator;
-        pair<iterator, iterator> iters;
+        std::pair<iterator, iterator> iters;
         
-        table_iterator(pair<iterator, iterator>& _iters);
+        table_iterator(std::pair<iterator, iterator>& _iters);
         iterator& begin();
         iterator& end();
     };
@@ -344,7 +350,7 @@ public:
 class parser_state
 {
     std::map<unsigned int, unsigned int> GOTO; //on a token goto a state
-    std::map<unsigned int, parser_action> >  ACTION; //on acceptance of a non-term, take an action
+    std::map<unsigned int, parser_action>  ACTION; //on acceptance of a non-term, take an action
     parser_action default_action;
 public:
     parser_state();
@@ -355,7 +361,6 @@ public:
     
     unsigned int get_goto(unsigned int _token_ID);
     parser_action& get_action(unsigned int non_term);
-    
 };
 
 class parser_generator
@@ -369,36 +374,33 @@ private:
     std::map<utf8_string, non_terminal_ptr> non_terminals;
     unsigned int next_token_num;
     
-    std::shared_ptr<lexer_generator> lex_gen;
+    std::shared_ptr<lexer_generator<token_data> > lex_gen;
     
     non_terminal_ptr start_nonterm;//we may want more than one of these.
-    //operator precedenace
     bool parser_table_generated;
     
     //the parse table information
-    std::map<unsigned int, utf8_string> term_map; //map terminal ID to terminal name
-    std::vector<production_info_ptr> production_information;
-    std::vector<parser_state> state_table;
+    std::shared_ptr< std::map<unsigned int, utf8_string> > term_map; //map terminal ID to terminal name
+    std::shared_ptr< std::vector<production_info_ptr> > production_information;
+    std::shared_ptr< std::vector<parser_state> > state_table;
     
 public:
     parser_generator(utf8_string _parser_table_file_name, utf8_string _lexer_table_file_name);
     
-    //set error function
-    
     //functions to define the languege
     terminal_ptr get_EOF_terminal();
     terminal_ptr get_EPSILON_terminal();
-    std::shared_ptr<lexer_generator> get_lexer_generator();
+    std::shared_ptr<lexer_generator<token_data> > get_lexer_generator();
     
     //these two will throw a general exception if there is any token of the same name
     terminal_ptr new_terminal(utf8_string name);
     non_terminal_ptr new_nonterminal(utf8_string name);
     
     void set_start_nonterm(non_terminal_ptr _start_nonterm);
-    void set_precedence(std::initializer_list<non_terminal_ptr> operators);
+    //void set_precedence(std::initializer_list<non_terminal_ptr> operators);
     void print_grammer();
     
-    std::shared_pointer<parser> get_parser();
+    std::shared_ptr<parser> get_parser();
     
 private: //functions usefull for terminal and non_terminal
     friend class terminal;
