@@ -127,25 +127,24 @@ unsigned int token_data::get_ID(){return token_ID;}
 //end token_data class
 
 // production
-production::next_production_ID=0;
-production::next_precedence_level=1;
+unsigned int production::next_production_ID=0;
+unsigned int production::next_precedence_level=1;
 production::production(non_terminal* _L_val, std::vector<token_ptr>& _tokens)
 {
     L_val=_L_val;
     tokens=_tokens;
     production_ID=next_production_ID;
     next_production_ID++;
-    _assoc=NONE;
+    assoc=NONE;
     precedence=0;
 }
 
 template<typename ret_type>
 production& production::set_action(std::function<ret_type(std::vector<token_data>&)> _func)
 {
-    parser_function_ptr new_parser_func(new parser_functional<ret_type> new_parser_func(_func));
-    action=new_parser_func
+    parser_function_ptr new_parser_func(new parser_functional<ret_type>(_func));
+    action=new_parser_func;
     return *this;
-    
 }
 
 production& production::set_associativity(association _assoc)
@@ -172,13 +171,14 @@ production& production::set_associativity(utf8_string _assoc)
     {
         throw gen_exception("unknown production association");
     }
-    return &this;
+    return *this;
 }
 
 production& production::set_precedence()
 {
     precedence=next_precedence_level;
     next_precedence_level++;
+    return *this;
 }
 
 production_info production::get_info()
@@ -186,7 +186,7 @@ production_info production::get_info()
     return production_info(L_val->token_ID, L_val->name, tokens.size(), action);
 }
 
-std::ostream& operator<<(std::ostream& os, const production& dt)
+ostream& csu::operator<<(std::ostream& os, const production& dt)
 {
      os<<dt.L_val->name<<" -> ";
      for(auto _token : dt.tokens)
@@ -199,13 +199,6 @@ std::ostream& operator<<(std::ostream& os, const production& dt)
 //end production class
 
 //start production_info class
-    friend std::ostream& operator<<(std::ostream& os, const production_info& dt);
-public:
-    unsigned int L_val_ID;
-    utf8_string L_val_name;
-    unsigned int num_tokens;
-    parser_function_ptr action; //will need to see if we really need this
-    
 production_info::production_info(unsigned int _L_val_ID, utf8_string& _L_val_name, unsigned int _num_tokens, parser_function_ptr _action)
 {
     L_val_ID=_L_val_ID;
@@ -214,7 +207,7 @@ production_info::production_info(unsigned int _L_val_ID, utf8_string& _L_val_nam
     action=_action;
 }
 
-std::ostream& operator<<(std::ostream& os, const production_info& dt)
+ostream& csu::operator<<(ostream& os, const production_info& dt)
 {
     os<<dt.L_val_name<<":"<<dt.num_tokens;
     return os;
@@ -279,27 +272,28 @@ bool item::operator==(item& RHS)
     else
     {
         if(not RHS.lookahead)
-            return false
+            return false;
         else
             return prod->production_ID==RHS.prod->production_ID  and loc==RHS.loc  and lookahead->token_ID==RHS.lookahead->token_ID;
     }
 }
 
-std::ostream& operator<<(std::ostream& os, const item& dt)
+ostream& csu::operator<<(ostream& os, const item& dt)
 {
-    cout<<prod->L_val_name<<"->";
-    for(unsigned int i=0; i<prod->tokens.size(); i++)
+    cout<<dt.prod->L_val->name<<"->";
+    for(unsigned int i=0; i<dt.prod->tokens.size(); i++)
     {
-        if(i==loc)
+        if(i==dt.loc)
         {
             cout<<'.';
         }
-        cout<<(prod->tokens[i]->name)<<" ";
+        cout<<(dt.prod->tokens[i]->name)<<" ";
     }
     
-    if(loc==prod->tokens.size()) cout<<".";
+    if(dt.loc==dt.prod->tokens.size()) cout<<".";
     
-    if(lookahead) cout<<'['<<lookahead->name<<']';
+    if(dt.lookahead) cout<<'['<<dt.lookahead->name<<']';
+    return os;
 }
 
 //end item class
@@ -321,7 +315,7 @@ item_set::item_set(unsigned int _id, item first_item)
     items.push_back(first_item);
 }
 
-void item_set::append(item new_item);
+void item_set::append(item new_item)
 {
     items.push_back(new_item);
 }
@@ -340,9 +334,9 @@ bool item_set::operator==(item_set& RHS)
 {
     if(RHS.size()!=size()) return false;
     
-    for(auto this_iter=items.begin(), RHS_iter=RHS.items.begin(), this_end=items.end; this_iter!=this_end; ++this_iter)
+    for(auto this_iter=items.begin(), RHS_iter=RHS.items.begin(), this_end=items.end(); this_iter!=this_end; ++this_iter)
     {
-        if(not (*this_iter)==(*RHS_iter))
+        if(not ((*this_iter)==(*RHS_iter)))
         {
             return false;
         }
@@ -377,45 +371,46 @@ bool item_set::has_item(item& RHS)
     return false;
 }
 
-ostream& operator<<(std::ostream& os, const item_set& dt)
+ostream& csu::operator<<(std::ostream& os, const item_set& dt)
 {
-    cout<<"SET: "<<id<<endl;
-    for(auto& has_item : items )
+    cout<<"SET: "<<dt.id<<endl;
+    for(auto& has_item : dt.items )
     {
         cout<<" "<<has_item<<endl;
     }
     cout<<"END SET"<<endl;
+    return os;
 }
 
 //end item_set
 
 //start propagation_table
-void table_iterator::table_iterator(pair<table_iterator::iterator, table_iterator::iterator>& _iters)
+propagation_table::table_iterator::table_iterator(pair<propagation_table::table_iterator::iterator, propagation_table::table_iterator::iterator> _iters)
 {
     iters=_iters;
 }
 
-table_iterator::iterator& table_iterator::begin()
+propagation_table::table_iterator::iterator& propagation_table::table_iterator::begin()
 {
-    return iters.first();
+    return iters.first;
 }
 
-table_iterator::iterator& table_iterator::end()
+propagation_table::table_iterator::iterator& propagation_table::table_iterator::end()
 {
-    return iters.second();
+    return iters.second;
 }
 
 void propagation_table::add_propagation(item_set_ptr from_set, item& from_item, item_set_ptr to_set, item& to_item)
 {
-    FROM_T from_pair(from_set.id, from_item);
+    FROM_T from_pair(from_set->id, from_item);
     TO_T to_pair(to_set, to_item);
     
     table.insert(make_pair(from_pair, to_pair));
 }
 
-void propagation_table::table_iterator propagation_table::get_propagation(item_set_ptr from_set, item& from_item)
+propagation_table::table_iterator propagation_table::get_propagation(item_set_ptr from_set, item& from_item)
 {
-    FROM_T from_pair(from_set.id, from_item);
+    FROM_T from_pair(from_set->id, from_item);
     table_iterator ret( table.equal_range(from_pair) );
     return ret;
 }
@@ -449,22 +444,23 @@ parser_action parser_action::get_none()
     return parser_action(NONE, 0);
 }
 
-bool parser_action::is_error(){return action_todo==ERROR;}
-bool parser_action::is_shift(){return action_todo==SHIFT;}
-bool parser_action::is_accept(){return action_todo==ACCEPT;}
-bool parser_action::is_reduce(){return action_todo==REDUCE;}
-bool parser_action::is_none(){return action_todo==NONE;}
+bool parser_action::is_error() const {return action_todo==ERROR;}
+bool parser_action::is_shift() const {return action_todo==SHIFT;}
+bool parser_action::is_accept() const {return action_todo==ACCEPT;}
+bool parser_action::is_reduce() const {return action_todo==REDUCE;}
+bool parser_action::is_none() const {return action_todo==NONE;}
 
-unsigned int parser_action::get_data()
+unsigned int parser_action::get_data() const
 {
     return data;
 }
+
 bool parser_action::operator==(parser_action& RHS)
 {
     return action_todo==RHS.action_todo and data==RHS.data;
 }
 
-ostream& operator<<(ostream& os, const parser_action& dt)
+ostream& csu::operator<<(ostream& os, const parser_action& dt)
 {
     if(dt.is_accept())
     {
@@ -486,6 +482,7 @@ ostream& operator<<(ostream& os, const parser_action& dt)
     {
         os<<"no action";
     }
+    return os;
 }
 
 //end parser_action
@@ -493,12 +490,11 @@ ostream& operator<<(ostream& os, const parser_action& dt)
 //start parser_state class
 parser_state::parser_state()
 {
-    default_action=get_error();
 }
 
 void parser_state::add_goto(unsigned int _token_ID, unsigned int _state)
 {
-    GOTO[_token_ID]==_state;
+    GOTO[_token_ID]=_state;
 }
 
 void parser_state::add_action(unsigned int _non_term, parser_action _action)
@@ -522,11 +518,11 @@ parser_action& parser_state::get_action(unsigned int non_term)
     auto iter=ACTION.find(non_term);
     if(iter==ACTION.end())
     {
-        return default_action();
+        return default_action;
     }
     else
     {
-        return *iter;
+        return iter->second;
     }
 }
 //end parser_state
@@ -534,14 +530,20 @@ parser_action& parser_state::get_action(unsigned int non_term)
 //parser_generator
 parser_generator::parser_generator(utf8_string _parser_table_file_name, utf8_string _lexer_table_file_name)
 {
-    lex_gen=std::shared_ptr<lexer_generator>(new lexer_generator(_lexer_table_file_name) );
-    EOF_terminal=terminal_ptr(new terminal("EOF", lex_gen.get()));
-    EPSILON_terminal=terminal_ptr(new terminal("EPSILON", lex_gen.get()));
-    lex_gen->set_EOF_action(lexer_function_generic(EOF_terminal->token_ID, true));
+    next_token_num=1;
 
     parser_table_file_name=_parser_table_file_name;
     parser_table_generated=false;
-    next_token_num=1;
+    
+    lex_gen=std::shared_ptr<lexer_generator<token_data> >(new lexer_generator<token_data> (_lexer_table_file_name) );
+    
+    EOF_terminal=terminal_ptr(new terminal("EOF", next_token_num, this));
+    next_token_num++;
+    
+    EPSILON_terminal=terminal_ptr(new terminal("EPSILON", next_token_num, this));
+    next_token_num++;
+    
+    lex_gen->set_EOF_action(lexer_function_generic(EOF_terminal->token_ID, true));
 }
 
 terminal_ptr parser_generator::get_EOF_terminal()
@@ -554,7 +556,7 @@ terminal_ptr parser_generator::get_EPSILON_terminal()
     return EPSILON_terminal;
 }
 
-std::shared_ptr<lexer_generator> parser_generator::get_lexer_generator()
+std::shared_ptr<lexer_generator<token_data> > parser_generator::get_lexer_generator()
 {
     return lex_gen;
 }
@@ -606,14 +608,14 @@ void parser_generator::set_start_nonterm(non_terminal_ptr _start_nonterm)
 
 void parser_generator::print_grammer()
 {
-    for(auto non_term : non_terminals)
+    for(auto name_nonterm_pair : non_terminals)
     {
-        cout<<non_term->name;
+        cout<<name_nonterm_pair.first;
         string prefix("");
-        for(int i=0; i<non_term->name.get_length(); i++) prefix+=string(" ");
+        for(int i=0; i<name_nonterm_pair.first.get_length(); i++) prefix+=string(" ");
         prefix+=string("|");
         
-        for(auto prod : non_term->productions)
+        for(auto prod : name_nonterm_pair.second->productions)
         {
             cout<<prefix;
             for(auto _token : prod->tokens) 
@@ -626,7 +628,7 @@ void parser_generator::print_grammer()
     }
 }
 
-std::shared_pointer<parser> parser_generator::get_parser()
+shared_ptr<parser> parser_generator::get_parser()
 {
     //need to fill this in too
     throw gen_exception("not implemented");
@@ -877,7 +879,7 @@ list<item_set_ptr> parser_generator::LR0_itemsets(non_terminal_ptr _start_token)
     {
         for(auto&  name_term_pair : terminals)
         {
-            auto term=name_term_pair.second();
+            auto term=name_term_pair.second;
             auto new_goto=goto_LR0(set, term);
             item_set_ptr _in_list=in_list(item_sets, new_goto)
             if(new_goto->size()>0 and not _in_list)
@@ -895,7 +897,7 @@ list<item_set_ptr> parser_generator::LR0_itemsets(non_terminal_ptr _start_token)
         
         for(auto&  name_nonterm_pair : non_terminals)
         {
-            auto nonterm=name_nonterm_pair.second();
+            auto nonterm=name_nonterm_pair.second;
             auto new_goto=goto_LR0(set, nonterm);
             item_set_ptr _in_list=in_list(item_sets, new_goto)
             if(new_goto->size()>0 and not _in_list)
@@ -932,8 +934,8 @@ void parser_generator::generate_parser_table()
     term_map= shared_ptr< map<unsigned int, utf8_string> >( new map<unsigned int, utf8_string>());
     for(auto name_term_pair : terminals)
     {
-        log(name_term_pair.second()->token_ID, ": ", name_term_pair->first());
-        *term_map[name_term_pair.second()->token_ID]=name_term_pair->first();
+        log(name_term_pair.second->token_ID, ": ", name_term_pair->first);
+        *term_map[name_term_pair.second->token_ID]=name_term_pair->first;
     }
     log();
     
@@ -946,9 +948,9 @@ void parser_generator::generate_parser_table()
     unsigned int num_productions;
     for(auto name_nonterm_pair : nonterminals)
     {
-        log(name_nonterm_pair.second()->token_ID, ": ", name_nonterm_pair->first());
-        nonterm_map[name_nonterm_pair.second()->token_ID]=name_nonterm_pair->first();
-        num_productions+=name_nonterm_pair.second()->productions.size();
+        log(name_nonterm_pair.second->token_ID, ": ", name_nonterm_pair->first);
+        nonterm_map[name_nonterm_pair.second->token_ID]=name_nonterm_pair->first;
+        num_productions+=name_nonterm_pair.second->productions.size();
     }
     log();
     
@@ -958,7 +960,7 @@ void parser_generator::generate_parser_table()
     production_information->resize(num_productions);
     for(auto name_nonterm_pair : nonterminals)
     {
-        for(auto prod : name_nonterm_pair.second()->productions)
+        for(auto prod : name_nonterm_pair.second->productions)
         {
             log(prod->id, ': ', prod);
             *production_information[prod->id]=prod.get_info();
@@ -986,8 +988,8 @@ void parser_generator::generate_parser_table()
     {
         for(auto& tokenID_set : LR0_set)
         {
-            auto LR1_goto_set=LR1_item_sets[ tokenID_set.second()->id ]
-            LR1_item_sets[LR0_set->id]->goto_table[ tokenID_set.first() ]=LR1_goto_set;
+            auto LR1_goto_set=LR1_item_sets[ tokenID_set.second->id ]
+            LR1_item_sets[LR0_set->id]->goto_table[ tokenID_set.first ]=LR1_goto_set;
         }
     }
     
@@ -999,7 +1001,7 @@ void parser_generator::generate_parser_table()
     {
         for(auto& name_term_pair : terminals)
         {
-            auto term_X=name_term_pair.second();
+            auto term_X=name_term_pair.second;
             auto LR0_goto_set=set_K->get_goto(term_X);
             if(not LR0_goto_set) continue;
             auto LR1_set=LR1_item_sets[LR0_goto_set->id];
@@ -1033,7 +1035,7 @@ void parser_generator::generate_parser_table()
         }
         for(auto& name_nonterm_pair : terminals)
         {
-            auto nonterm_X=name_nonterm_pair.second();
+            auto nonterm_X=name_nonterm_pair.second;
             auto LR0_goto_set=set_K->get_goto(nonterm_X);
             if(not LR0_goto_set) continue;
             auto LR1_set=LR1_item_sets[LR0_goto_set->id];
@@ -1090,10 +1092,10 @@ void parser_generator::generate_parser_table()
                 item LR0item=LR1item.copy( token_ptr() );
                 for(auto& to_setitem_pair : prop_table.get_propagation(LR0set, LR0item )
                 {
-                    item new_to_item=to_setitem_pair.second().copy( LR1item.lookahead );
-                    if(not to_setitem_pair.first()->has_item(new_to_item) )
+                    item new_to_item=to_setitem_pair.second.copy( LR1item.lookahead );
+                    if(not to_setitem_pair.first->has_item(new_to_item) )
                     {
-                        to_setitem_pair.first()->append(new_to_item);
+                        to_setitem_pair.first->append(new_to_item);
                         items_added=true;
                     }
                 }
@@ -1227,8 +1229,8 @@ void parser_generator::generate_parser_table()
         //set the goto table
         for(auto& name_nonterm_pair : non_terminals)
         {
-            auto goto_set = set.get_goto(name_nonterm_pair.second());
-            if(goto_set) current_state.add_goto(name_nonterm_pair.second()->token_ID, goto_set->id);
+            auto goto_set = set.get_goto(name_nonterm_pair.second);
+            if(goto_set) current_state.add_goto(name_nonterm_pair.second->token_ID, goto_set->id);
         }
     }
     
@@ -1249,13 +1251,13 @@ void parser_generator::generate_parser_table()
         
         for(auto&  id_action_pair : current_state.ACTION )
         {
-            log("  on ", *term_map[id_action_pair.first()], " ", id_action_pair.second());
+            log("  on ", *term_map[id_action_pair.first], " ", id_action_pair.second);
         }
         log();
         
         for(auto& nonterm_state_pair in current_state.GOTO)
         {
-            log("  goto ", nonterm_state_pair.second(), " on ", nonterm_map[nonterm_state_pair.first()]);
+            log("  goto ", nonterm_state_pair.second, " on ", nonterm_map[nonterm_state_pair.first]);
         }
         log();
     }

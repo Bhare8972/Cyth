@@ -202,7 +202,7 @@ public:
     non_terminal* L_val;
     std::vector<token_ptr> tokens;
     parser_function_ptr action;
-    association _assoc;
+    association assoc;
     unsigned int precedence; //lower number means higher precedence. Highist precedence is 1. 0 is no-precedence.
     
     production(non_terminal* _L_val, std::vector<token_ptr>& _tokens);
@@ -250,7 +250,7 @@ public:
     bool is_kernal( non_terminal_ptr augmented_start);
     bool is_LR0();
     
-    std::list<token_ptr> get_postTokens();
+    std::vector<token_ptr> get_postTokens();
     
     item copy();
     item copy(token_ptr new_lookahead);
@@ -288,7 +288,7 @@ typedef std::shared_ptr<item_set> item_set_ptr;
 class propagation_table
 {
 private:
-    typedef std::pair< item_set_ptr, item& >  FROM_T;
+    typedef std::pair< unsigned int, item& >  FROM_T;
     typedef std::pair< item_set_ptr, item& >  TO_T;
     
     class table_iterator
@@ -298,7 +298,7 @@ private:
         typedef std::multimap< FROM_T, TO_T >::iterator iterator;
         std::pair<iterator, iterator> iters;
         
-        table_iterator(std::pair<iterator, iterator>& _iters);
+        table_iterator(std::pair<iterator, iterator> _iters);
         iterator& begin();
         iterator& end();
     };
@@ -336,13 +336,13 @@ public:
     static parser_action get_shift(unsigned int state);
     static parser_action get_reduce(unsigned int production_ID);
     
-    bool is_error();
-    bool is_accept();
-    bool is_shift();
-    bool is_reduce();
-    bool is_none();
+    bool is_error() const; 
+    bool is_accept() const;
+    bool is_shift() const;
+    bool is_reduce() const;
+    bool is_none() const;
     
-    unsigned int get_data();
+    unsigned int get_data() const;
     
     bool operator==(parser_action& RHS);
 };
@@ -351,7 +351,7 @@ class parser_state
 {
     std::map<unsigned int, unsigned int> GOTO; //on a token goto a state
     std::map<unsigned int, parser_action>  ACTION; //on acceptance of a non-term, take an action
-    parser_action default_action;
+    parser_action default_action=parser_action::get_error();
 public:
     parser_state();
 
