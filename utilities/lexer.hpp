@@ -149,7 +149,7 @@ public:
     {
         add_msg(_msgs...);
     }
-    
+
     lexer_exception(const lexer_exception& to_copy) : msg(to_copy.msg.str() )
     //copy constructor
     {
@@ -289,7 +289,7 @@ public:
                     DFA_state=(*state_table)[DFA_state_index+initial_DFA_index];
                 }
             }
-            
+
             if(input_buffer->has_read_EOF and DFA_state->accepting_info != -1)
             //there may be an unaccepted state if the next char is EOF
             {
@@ -362,7 +362,7 @@ void binary_write(std::ostream& output, T to_write)
 
 template<typename T>
 void binary_read(std::istream& input, T& to_read)
-//read a bit of numerical data from a file. 
+//read a bit of numerical data from a file.
 //type must match when it was written, or will be inconsisitant
 {
     input.read((char*)&to_read,sizeof(to_read));
@@ -372,9 +372,11 @@ template<typename return_type >
 class lexer_generator
 //a class that will create a lexer for us.
 {
-private:
+public:
 
     typedef std::function<return_type (utf8_string&, location_span&, lexer<return_type>*)>  lex_func_t;
+private:
+
 
     struct pattern
     {
@@ -398,6 +400,7 @@ private:
     lex_func_t EOF_action;
 
 public:
+
 
     lexer_generator(utf8_string _state_table_file_name)
     {
@@ -472,18 +475,18 @@ public:
 
         return lexer<return_type>(EOF_action, state_table, actions, lexer_states);
     }
-    
+
     void load_from_file()
     //read the state table from a file
     {
         std::ifstream fin(state_table_file_name.to_cpp_string());
         if(not fin) return;
-        
+
         //reset the generator.
         state_table.reset();
         lexer_states.reset();
         made_table=false;
-        
+
         //get state_table
         unsigned int num_states=0;
         binary_read(fin, num_states);
@@ -505,7 +508,7 @@ public:
             }
             state_table->push_back(NDFS);
         }
-        
+
         //get lexer_states
         unsigned int N_lexer_states=0;
         binary_read(fin, N_lexer_states);
@@ -519,12 +522,12 @@ public:
         }
         made_table=true;
     }
-    
+
     void load_to_file()
     //serialize the state_table to a file
     {
         if(not made_table) return;
-        
+
         std::ofstream fout(state_table_file_name.to_cpp_string(), std::ios_base::binary);
         //first we output state_table
         uint num_states=state_table->size();
@@ -575,7 +578,7 @@ private:
                     throw gen_exception("full regex cannot be parsed");
                 if( not regex_tree)
                     throw gen_exception("could not parse regex");
-                
+
 
                 //get new states, make end state as accepting
                 std::list< std::shared_ptr<NFA_state> > new_states=regex_tree->get_NFA();

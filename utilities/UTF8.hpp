@@ -92,9 +92,9 @@ public:
 
     uint32_t to_UTF32() const;
     //return this charector encoded as UTF32
-    
+
     bool is_empty() const;
-    
+
     void put(std::ostream& out_stream);
     //put this code_point into a stream
 
@@ -117,6 +117,7 @@ private:
 
     friend std::ostream& operator<<(std::ostream& os, const utf8_string& dt);
     friend utf8_string operator+(const utf8_string& LHS, const utf8_string& RHS);
+    friend bool operator< (const utf8_string& lhs, const utf8_string& rhs);
 
 
 public:
@@ -191,6 +192,7 @@ public:
 
 std::ostream& operator<<(std::ostream& os, const utf8_string& str);
 utf8_string operator+(const utf8_string& LHS, const utf8_string& RHS);
+bool operator< (const utf8_string& lhs, const utf8_string& rhs);
 
 } //end csu namespace
 

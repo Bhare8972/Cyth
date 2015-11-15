@@ -23,6 +23,55 @@ this file is a LALR1 parser,parser_generator, and associated utilities
 using namespace csu;
 using namespace std;
 
+//lexer_function_generic
+lexer_function_generic::lexer_function_generic(unsigned int _ID, bool _return_data)
+{
+    terminal_ID=_ID;
+    return_data=_return_data;
+}
+
+token_data lexer_function_generic::operator()( utf8_string& data, location_span& loc, lexer<token_data>* lex)
+{
+    lex->continue_lexing(return_data);
+    dyn_holder new_data(data);
+    token_data ret(terminal_ID, new_data, loc);
+    return ret;
+}
+
+////lex_func_encapuslator
+//lex_func_encapsulator::lex_func_encapsulator()
+//{
+//    _func=0;
+//}
+//
+//lex_func_encapsulator::lex_func_encapsulator(lexer_function_class* func)
+//{
+//    _func=func;
+//}
+//
+//lex_func_encapsulator::lex_func_encapsulator(lex_func_encapuslator& RHS)
+//{
+//    _func=RHS._func;
+//    RHS._func=0;
+//}
+//
+//lex_func_encapsulator::~lex_func_encapsulator()
+//{
+//    if(_func) delete _func;
+//}
+//
+//token_data lex_func_encapsulator::operator()( utf8_string& data, location_span& loc, lexer<token_data>* lex)
+//{
+//    if(not _func) throw gen_exception("cannot call lex_func_encapsulator with empty pointer");
+//
+//    return (*_func)(data, loc, lex);
+//}
+//
+//void lex_func_encapsulator::operator=(lex_func_encapuslator& RHS)
+//{
+//    _func=RHS._func;
+//    RHS._func=0;
+//}
 
 
 //begin token class
@@ -41,35 +90,19 @@ ostream& csu::operator<<(ostream& os, const token& dt)
 //end token class
 
 //terminal
-terminal::terminal(utf8_string _name, unsigned int ID, parser_generator* _par_gen)
+terminal::terminal(utf8_string _name, unsigned int ID, lexer_generator<token_data>* _lex_gen)
 {
     name=_name;
     is_terminal=true;
     token_ID=ID;
-    par_gen=_par_gen;
+    lex_gen=_lex_gen;
 }
 
 void terminal::add_pattern(utf8_string pattern, bool return_data)
 {
     lexer_function_generic new_lex_func(token_ID, return_data);
-    par_gen->add_lexer_pattern(pattern, new_lex_func);
-}
-
-template<typename ret_type>
-void terminal::add_pattern(utf8_string pattern, function<ret_type(utf8_string, lexer<token_data>*)> _func)
-{
-    lexer_functional<ret_type> new_lex_func(token_ID, _func);
-    par_gen->add_lexer_pattern(pattern, new_lex_func);
-}
-
-template<typename ret_type>
-void terminal::add_patterns(initializer_list<utf8_string> patterns, function<ret_type(utf8_string, lexer<token_data>*)> _func)
-{
-    lexer_functional<ret_type> new_lex_func(token_ID, _func);
-    for(auto& pattern : patterns)
-    {
-        par_gen->add_lexer_pattern(pattern, new_lex_func);
-    }
+    lexer_generator<token_data>::lex_func_t lex_func(new_lex_func);
+    lex_gen->add_pattern(pattern, lex_func);
 }
 //end terminal class
 
@@ -133,18 +166,10 @@ production::production(non_terminal* _L_val, std::vector<token_ptr>& _tokens)
 {
     L_val=_L_val;
     tokens=_tokens;
-    production_ID=next_production_ID;
+    id=next_production_ID;
     next_production_ID++;
     assoc=NONE;
     precedence=0;
-}
-
-template<typename ret_type>
-production& production::set_action(std::function<ret_type(std::vector<token_data>&)> _func)
-{
-    parser_function_ptr new_parser_func(new parser_functional<ret_type>(_func));
-    action=new_parser_func;
-    return *this;
 }
 
 production& production::set_associativity(association _assoc)
@@ -181,9 +206,9 @@ production& production::set_precedence()
     return *this;
 }
 
-production_info production::get_info()
+std::shared_ptr<production_info> production::get_info()
 {
-    return production_info(L_val->token_ID, L_val->name, tokens.size(), action);
+    return std::shared_ptr<production_info>(new production_info(L_val->token_ID, L_val->name, tokens.size(), action));
 }
 
 ostream& csu::operator<<(std::ostream& os, const production& dt)
@@ -232,8 +257,8 @@ item::item(std::shared_ptr<production> _prod, unsigned int _loc, token_ptr _look
 bool item::is_kernal( non_terminal_ptr augmented_start)
 {
     if(loc!=0) return true;
-    
-    if( (*augmented_start->productions.begin())->production_ID == prod->production_ID )
+
+    if( (*augmented_start->productions.begin())->id == prod->id )
     {
         return true;
     }
@@ -265,7 +290,7 @@ bool item::operator==(item& RHS)
     if(not lookahead)
     {
         if(not RHS.lookahead)
-            return prod->production_ID==RHS.prod->production_ID  and loc==RHS.loc;
+            return prod->id==RHS.prod->id  and loc==RHS.loc;
         else
             return false;
     }
@@ -274,7 +299,7 @@ bool item::operator==(item& RHS)
         if(not RHS.lookahead)
             return false;
         else
-            return prod->production_ID==RHS.prod->production_ID  and loc==RHS.loc  and lookahead->token_ID==RHS.lookahead->token_ID;
+            return prod->id==RHS.prod->id  and loc==RHS.loc  and lookahead->token_ID==RHS.lookahead->token_ID;
     }
 }
 
@@ -289,9 +314,9 @@ ostream& csu::operator<<(ostream& os, const item& dt)
         }
         cout<<(dt.prod->tokens[i]->name)<<" ";
     }
-    
+
     if(dt.loc==dt.prod->tokens.size()) cout<<".";
-    
+
     if(dt.lookahead) cout<<'['<<dt.lookahead->name<<']';
     return os;
 }
@@ -333,7 +358,7 @@ shared_ptr<item_set> item_set::get_goto(token_ptr _token)
 bool item_set::operator==(item_set& RHS)
 {
     if(RHS.size()!=size()) return false;
-    
+
     for(auto this_iter=items.begin(), RHS_iter=RHS.items.begin(), this_end=items.end(); this_iter!=this_end; ++this_iter)
     {
         if(not ((*this_iter)==(*RHS_iter)))
@@ -404,8 +429,8 @@ void propagation_table::add_propagation(item_set_ptr from_set, item& from_item, 
 {
     FROM_T from_pair(from_set->id, from_item);
     TO_T to_pair(to_set, to_item);
-    
-    table.insert(make_pair(from_pair, to_pair));
+
+    table.insert( make_pair(from_pair, to_pair));
 }
 
 propagation_table::table_iterator propagation_table::get_propagation(item_set_ptr from_set, item& from_item)
@@ -419,6 +444,18 @@ propagation_table::table_iterator propagation_table::get_propagation(item_set_pt
 
 
 //start parser_action
+parser_action::parser_action(action_type _todo, unsigned int _data)
+{
+    action_todo=_todo;
+    data=_data;
+}
+
+parser_action::parser_action()
+{
+    action_todo=NONE;
+    data=0;
+}
+
 parser_action parser_action::get_error()
 {
     return parser_action(ERROR, 0);
@@ -534,15 +571,15 @@ parser_generator::parser_generator(utf8_string _parser_table_file_name, utf8_str
 
     parser_table_file_name=_parser_table_file_name;
     parser_table_generated=false;
-    
+
     lex_gen=std::shared_ptr<lexer_generator<token_data> >(new lexer_generator<token_data> (_lexer_table_file_name) );
-    
-    EOF_terminal=terminal_ptr(new terminal("EOF", next_token_num, this));
+
+    EOF_terminal=terminal_ptr(new terminal("EOF", next_token_num, lex_gen.get()));
     next_token_num++;
-    
-    EPSILON_terminal=terminal_ptr(new terminal("EPSILON", next_token_num, this));
+
+    EPSILON_terminal=terminal_ptr(new terminal("EPSILON", next_token_num, lex_gen.get()));
     next_token_num++;
-    
+
     lex_gen->set_EOF_action(lexer_function_generic(EOF_terminal->token_ID, true));
 }
 
@@ -571,8 +608,8 @@ terminal_ptr parser_generator::new_terminal(utf8_string name)
     {
         throw gen_exception("cannot make a new terminal with the same name as a non-terminal");
     }
-    
-    terminal_ptr new_term(new terminal(name, next_token_num, this));
+
+    terminal_ptr new_term(new terminal(name, next_token_num, lex_gen.get()));
     next_token_num++;
     terminals[name]=new_term;
     return new_term;
@@ -588,7 +625,7 @@ non_terminal_ptr parser_generator::new_nonterminal(utf8_string name)
     {
         throw gen_exception("cannot make a new non-terminal with the same name as anouther non-terminal");
     }
-    
+
     non_terminal_ptr new_nonterm(new non_terminal(name, next_token_num, this));
     next_token_num++;
     if(not start_nonterm)
@@ -614,11 +651,11 @@ void parser_generator::print_grammer()
         string prefix("");
         for(int i=0; i<name_nonterm_pair.first.get_length(); i++) prefix+=string(" ");
         prefix+=string("|");
-        
+
         for(auto prod : name_nonterm_pair.second->productions)
         {
             cout<<prefix;
-            for(auto _token : prod->tokens) 
+            for(auto _token : prod->tokens)
             {
                 cout<<_token->name;
             }
@@ -634,10 +671,10 @@ shared_ptr<parser> parser_generator::get_parser()
     throw gen_exception("not implemented");
 }
 
-void parser_generator::add_lexer_pattern(utf8_string& regex_pattern, lexer_function_class func)
-{
-    lex_gen->add_pattern(regex_pattern, func);
-}
+//void parser_generator::add_lexer_pattern(utf8_string& regex_pattern, lexer_generator<token_data>::lex_func_t func)
+//{
+//    lex_gen->add_pattern(regex_pattern, func);
+//}
 
 void parser_generator::resolve_unknown_terminal(token_ptr _new_terminal) //this is for when the terminal is referanced by a string
 {
@@ -645,30 +682,30 @@ void parser_generator::resolve_unknown_terminal(token_ptr _new_terminal) //this 
     {
         throw gen_exception("cannot referance a non-terminal by string");
     }
-    
-    auto term_iter=terminals.find(_new_terminal->name)
+
+    auto term_iter=terminals.find(_new_terminal->name);
     if(term_iter==terminals.end())
     {
         //it is a new terminal
         _new_terminal->token_ID=next_token_num;
         next_token_num++;
         lex_gen->add_pattern(_new_terminal->name, lexer_function_generic(_new_terminal->token_ID, true));
-        terminals[_new_terminal->name]=_new_terminal;
+        terminals[_new_terminal->name]=dynamic_pointer_cast<terminal>(_new_terminal);
     }
     else
     {
         //it is a known terminal
-        _new_terminal->token_ID=(*term_iter)->token_ID;
+        _new_terminal->token_ID=(*term_iter).second->token_ID;
     }
 }
 
 list<token_ptr> parser_generator::first(list<token_ptr>& tokens)
 {
     list<token_ptr> ret;
-    list<token_ptr> empty;
+    list<unsigned int> empty;
     bool has_epsilon=false;
     bool all_previous_have_epsilon=true;
-    
+
     for(auto _toke : tokens)
     {
         bool token_has_epsilon=false;
@@ -681,12 +718,12 @@ list<token_ptr> parser_generator::first(list<token_ptr>& tokens)
             break;
         }
     }
-    
+
     if(all_previous_have_epsilon)
     {
         has_epsilon=true;
     }
-    
+
     //remove duplicates
     for(auto iter=ret.begin(), end=ret.end(); iter!=end; ++iter)
     {
@@ -702,7 +739,7 @@ list<token_ptr> parser_generator::first(list<token_ptr>& tokens)
             }
         }
     }
-    
+
     //return
     if(has_epsilon){ ret.push_back(EPSILON_terminal);}
     return ret;
@@ -711,12 +748,12 @@ list<token_ptr> parser_generator::first(list<token_ptr>& tokens)
 list<token_ptr> parser_generator::first_single(token_ptr _token, list<unsigned int>& exclusion_productions, bool& output_contains_epsilon)
 {
     list<token_ptr> ret;
-    
+
     if(_token->token_ID==EPSILON_terminal->token_ID)
     {
         output_contains_epsilon=true;
         return ret;
-    }    
+    }
     else if(_token->is_terminal)
     {
         output_contains_epsilon=false;
@@ -729,42 +766,42 @@ list<token_ptr> parser_generator::first_single(token_ptr _token, list<unsigned i
         non_terminal_ptr non_term( dynamic_pointer_cast<non_terminal>(_token) );
         for( auto prod : non_term->productions )
         {
-            if( find(exclusion_productions.begin(), exclusion_productions.end(), prod->production_ID) != exclusion_productions.end() )
+            if( find(exclusion_productions.begin(), exclusion_productions.end(), prod->id) != exclusion_productions.end() )
             {
                 //if production is in exclusion_productions, then skip it
                 continue;
             }
-            
+
             bool production_is_all_epsilons=true;
             for(auto p_token : prod->tokens)
             {
                 list<token_ptr> p_token_first;
                 bool p_token_epsilon;
-                
+
                 if(p_token->token_ID==_token->token_ID)
                 {
-                    list<token_ptr> new_exclusions=exclusion_productions;
-                    new_exclusions.push_back(prod->production_ID);
+                    list<unsigned int> new_exclusions=exclusion_productions;
+                    new_exclusions.push_back(prod->id);
                     p_token_first=first_single(p_token, new_exclusions, p_token_epsilon);
                 }
                 else
                 {
                     p_token_first=first_single(p_token, exclusion_productions, p_token_epsilon);
                 }
-            
+
                 if(production_is_all_epsilons)
                 {
                     ret.insert(ret.end(), p_token_first.begin(), p_token_first.end() );
                     output_contains_epsilon=output_contains_epsilon or p_token_epsilon;
                 }
-                
+
                 if(not p_token_epsilon)
                 {
                     production_is_all_epsilons=false;
                     break;
                 }
             }
-            
+
             if(production_is_all_epsilons)
             {
                 output_contains_epsilon=true;
@@ -781,7 +818,7 @@ void parser_generator::closure_LR1(item_set_ptr input_set)
     while( items_added )
     {
         items_added=false;
-        for(auto& input_item : input_set)
+        for(auto& input_item : *input_set)
         {
             auto post_tokens=input_item.get_postTokens();
             auto post_tokens_iterator=post_tokens.begin();
@@ -794,7 +831,7 @@ void parser_generator::closure_LR1(item_set_ptr input_set)
                 {
                     for(auto first_terminal : first_data)
                     {
-                        item new_item(prod, 0, first_terminal)
+                        item new_item(prod, 0, first_terminal);
                         if( not input_set->has_item(new_item))
                         {
                             input_set->append(new_item);
@@ -810,23 +847,23 @@ void parser_generator::closure_LR1(item_set_ptr input_set)
 void parser_generator::closure_LR0(item_set_ptr input_set)
 {
     bool item_added=true;
-    while(items_added)
+    while(item_added)
     {
-        items_added=false;
-        for(auto input_item : input_set)
+        item_added=false;
+        for(item& input_item : *input_set)
         {
-            list<token_ptr> post_tokens( input_item->get_postTokens() );
-            if( post_tokens.size()>0 and  not (*post_tokens.begin())->is_terminal)
+            vector<token_ptr> post_tokens( input_item.get_postTokens() );
+            if( post_tokens.size()>0 and  not post_tokens[0]->is_terminal)
             {
-                non_terminal_ptr next_token= dynamic_pointer_cast<non_terminal>(*post_tokens.begin());
-                
+                non_terminal_ptr next_token= dynamic_pointer_cast<non_terminal>(post_tokens[0]);
+
                 for(auto next_token_production : next_token->productions )
                 {
                     item new_item(next_token_production, 0);
                     if(not input_set->has_item(new_item))
                     {
                         input_set->append(new_item);
-                        items_added=true;
+                        item_added=true;
                     }
                 }
             }
@@ -837,17 +874,17 @@ void parser_generator::closure_LR0(item_set_ptr input_set)
 item_set_ptr parser_generator::goto_LR0(item_set_ptr input_set, token_ptr _token)
 {
     item_set_ptr ret( new item_set());
-    for(auto& input_item : input_set)
+    for(item& input_item : *input_set)
     {
-        auto post_tokens=input_item->get_postTokens();
-        if(post_tokens.size()>0 and (*post_tokens.begin())->token_ID==_token->token_ID)
+        auto post_tokens=input_item.get_postTokens();
+        if(post_tokens.size()>0 and post_tokens[0]->token_ID==_token->token_ID)
         {
             auto new_item=input_item.copy();
             new_item.loc+=1;
-            ret.append(new_item);
+            ret->append(new_item);
         }
     }
-    
+
     closure_LR0(ret);
     return ret;
 }
@@ -865,15 +902,15 @@ list<item_set_ptr> parser_generator::LR0_itemsets(non_terminal_ptr _start_token)
             }
         }
         return  item_set_ptr(); //not in the list
-    }
-    
-    
+    };
+
+
     item_set_ptr set_zero(new item_set(0));
     item start_item(*_start_token->productions.begin(), 0);
-    set_zero.append(start_item);
+    set_zero->append(start_item);
     closure_LR0(set_zero);
     list<item_set_ptr> item_sets({set_zero});
-    
+
     unsigned int next_set_ID=1;
     for(auto set : item_sets)
     {
@@ -881,10 +918,10 @@ list<item_set_ptr> parser_generator::LR0_itemsets(non_terminal_ptr _start_token)
         {
             auto term=name_term_pair.second;
             auto new_goto=goto_LR0(set, term);
-            item_set_ptr _in_list=in_list(item_sets, new_goto)
+            item_set_ptr _in_list=in_list(item_sets, new_goto);
             if(new_goto->size()>0 and not _in_list)
             {
-                new_goto.id=next_set_ID;
+                new_goto->id=next_set_ID;
                 next_set_ID++;
                 set->add_goto(term, new_goto);
                 item_sets.push_back(new_goto);
@@ -894,15 +931,15 @@ list<item_set_ptr> parser_generator::LR0_itemsets(non_terminal_ptr _start_token)
                 set->add_goto(term, _in_list);
             }
         }
-        
+
         for(auto&  name_nonterm_pair : non_terminals)
         {
             auto nonterm=name_nonterm_pair.second;
             auto new_goto=goto_LR0(set, nonterm);
-            item_set_ptr _in_list=in_list(item_sets, new_goto)
+            item_set_ptr _in_list=in_list(item_sets, new_goto);
             if(new_goto->size()>0 and not _in_list)
             {
-                new_goto.id=next_set_ID;
+                new_goto->id=next_set_ID;
                 next_set_ID++;
                 set->add_goto(nonterm, new_goto);
                 item_sets.push_back(new_goto);
@@ -918,8 +955,8 @@ list<item_set_ptr> parser_generator::LR0_itemsets(non_terminal_ptr _start_token)
 
 void parser_generator::generate_parser_table()
 {
-    logger log();
-    
+    logger log;
+
     ////augment the grammer////
     if(not start_nonterm)
     {
@@ -927,74 +964,74 @@ void parser_generator::generate_parser_table()
     }
     non_terminal_ptr augmented_start= new_nonterminal("Augmented Start Token");
     augmented_start->add_production({start_nonterm});
-    
+
     ////basic accounting////
     //terminal map
     log("terminals:");
     term_map= shared_ptr< map<unsigned int, utf8_string> >( new map<unsigned int, utf8_string>());
     for(auto name_term_pair : terminals)
     {
-        log(name_term_pair.second->token_ID, ": ", name_term_pair->first);
-        *term_map[name_term_pair.second->token_ID]=name_term_pair->first;
+        log(name_term_pair.second->token_ID, ": ", name_term_pair.first);
+        (*term_map)[name_term_pair.second->token_ID]=name_term_pair.first;
     }
     log();
-    
+
     //terminal error recovery table
     //not doing this
-    
+
     //log the nonterms
     log("nonterminals:");
     map<unsigned int, utf8_string> nonterm_map;
     unsigned int num_productions;
-    for(auto name_nonterm_pair : nonterminals)
+    for(auto name_nonterm_pair : non_terminals)
     {
-        log(name_nonterm_pair.second->token_ID, ": ", name_nonterm_pair->first);
-        nonterm_map[name_nonterm_pair.second->token_ID]=name_nonterm_pair->first;
+        log(name_nonterm_pair.second->token_ID, ": ", name_nonterm_pair.first);
+        nonterm_map[name_nonterm_pair.second->token_ID]=name_nonterm_pair.first;
         num_productions+=name_nonterm_pair.second->productions.size();
     }
     log();
-    
-    //set production information    
+
+    //set production information
     log("grammer productions:");
     production_information=shared_ptr< vector<production_info_ptr> >( new vector<production_info_ptr>() );
     production_information->resize(num_productions);
-    for(auto name_nonterm_pair : nonterminals)
+    for(auto name_nonterm_pair : non_terminals)
     {
         for(auto prod : name_nonterm_pair.second->productions)
         {
-            log(prod->id, ': ', prod);
-            *production_information[prod->id]=prod.get_info();
+            log(prod->id, ": ", prod);
+            (*production_information)[prod->id]=prod->get_info();
         }
     }
     log();
-    
+
     ///// generate the parse table /////
     auto LR0_item_sets=LR0_itemsets(augmented_start);
-    
+
     //remove kernal items ?? (there is an extra not in here... it is removing non-kernal items)
     for( auto set : LR0_item_sets)
     {
         set->items.erase( remove_if(set->items.begin(), set->items.end(), [&](item& it){return not it.is_kernal(augmented_start);}), set->items.end() );
     }
-    
+
     //create new LR1 item stes from old LR0 item sets
     vector< item_set_ptr > LR1_item_sets;
     LR1_item_sets.resize(LR0_item_sets.size());
     for(auto LR0_set : LR0_item_sets) //make all the LR1 sets
     {
-        LR1_item_sets[LR0_set->id]=item_set_ptr(new item_set(set->id));
+        LR1_item_sets[LR0_set->id]=item_set_ptr(new item_set(LR0_set->id));
     }
     for(auto LR0_set : LR0_item_sets) //duplicate the goto tables
     {
-        for(auto& tokenID_set : LR0_set)
+        for(auto& tokenID_set_pair : LR0_set->goto_table)
         {
-            auto LR1_goto_set=LR1_item_sets[ tokenID_set.second->id ]
-            LR1_item_sets[LR0_set->id]->goto_table[ tokenID_set.first ]=LR1_goto_set;
+            auto LR1_goto_set=LR1_item_sets[ tokenID_set_pair.second->id ];
+            LR1_item_sets[LR0_set->id]->goto_table[ tokenID_set_pair.first ]=LR1_goto_set;
         }
     }
-    
+
     //algorithm 4.62 Generate propagation table and spontanious lookaheads
-    propagation_table prop_table();
+    propagation_table prop_table;
     terminal_ptr fake_terminal("fakeTerm", next_token_num, this);
     next_token_num++;
     for(auto set_K : LR0_item_sets)
@@ -1005,14 +1042,14 @@ void parser_generator::generate_parser_table()
             auto LR0_goto_set=set_K->get_goto(term_X);
             if(not LR0_goto_set) continue;
             auto LR1_set=LR1_item_sets[LR0_goto_set->id];
-            
+
             for(item& K_item : *set_K)
             {
-                item_set_ptr set_J( new item_set(0, K_item->copy(fake_terminal) ) );
+                item_set_ptr set_J( new item_set(0, K_item.copy(fake_terminal) ) );
                 closure_LR1(set_J);
                 for(item& J_item : *set_J)
                 {
-                    auto post_tokens=J_item->get_postTokens();
+                    auto post_tokens=J_item.get_postTokens();
                     if(post_tokens.size()>0 and (*post_tokens.begin())->token_ID==term_X->token_ID)
                     {
                         auto J_item_copy=J_item.copy();
@@ -1026,7 +1063,7 @@ void parser_generator::generate_parser_table()
                         {
                             if( count(LR1_set->items.begin(), LR1_set->items.end(), J_item_copy)==0 )
                             {
-                                LR1_set.append(J_item_copy);
+                                LR1_set->append(J_item_copy);
                             }
                         }
                     }
@@ -1039,14 +1076,14 @@ void parser_generator::generate_parser_table()
             auto LR0_goto_set=set_K->get_goto(nonterm_X);
             if(not LR0_goto_set) continue;
             auto LR1_set=LR1_item_sets[LR0_goto_set->id];
-            
+
             for(item& K_item : *set_K)
             {
-                item_set_ptr set_J( new item_set(0, K_item->copy(fake_terminal) ) );
+                item_set_ptr set_J( new item_set(0, K_item.copy(fake_terminal) ) );
                 closure_LR1(set_J);
                 for(item& J_item : *set_J)
                 {
-                    auto post_tokens=J_item->get_postTokens();
+                    auto post_tokens=J_item.get_postTokens();
                     if(post_tokens.size()>0 and (*post_tokens.begin())->token_ID==nonterm_X->token_ID)
                     {
                         auto J_item_copy=J_item.copy();
@@ -1060,7 +1097,7 @@ void parser_generator::generate_parser_table()
                         {
                             if( count(LR1_set->items.begin(), LR1_set->items.end(), J_item_copy)==0 )
                             {
-                                LR1_set.append(J_item_copy);
+                                LR1_set->append(J_item_copy);
                             }
                         }
                     }
@@ -1068,17 +1105,17 @@ void parser_generator::generate_parser_table()
             }
         }
     }
-    
+
     //add EOF to augmented_start production
-    for(auto& LR0_item : *(*LR0_item_sets.begin()))
+    for(item& LR0_item : *(*LR0_item_sets.begin()))
     {
-        if(LR0_item.production->id==augmented_start->id and LR0_item->loc==0)
+        if(LR0_item.prod->id==augmented_start->token_ID and LR0_item.loc==0)
         {
-            item new_item=LRO_item.copy(EOF_terminal);
+            item new_item=LR0_item.copy(EOF_terminal);
             (*LR0_item_sets.begin())->append(new_item);
         }
     }
-    
+
     //propagate lookahead items to form all LALR(1) items
     bool items_added=true;
     while(items_added)
@@ -1086,12 +1123,13 @@ void parser_generator::generate_parser_table()
         items_added=false;
         for(auto LR1set : LR1_item_sets)
         {
-            item_set_ptr LR0set=find_if(LR0_item_sets.begin(), LR0_item_sets.end(), [](const item_set_ptr A ){A->id==LR1_set->id;});
-            for(item& LR1item : LR1set)
+            item_set_ptr LR0set=*find_if(LR0_item_sets.begin(), LR0_item_sets.end(), [=](const item_set_ptr A ){return A->id==LR1set->id;});
+            for(item& LR1item : *LR1set)
             {
                 item LR0item=LR1item.copy( token_ptr() );
-                for(auto& to_setitem_pair : prop_table.get_propagation(LR0set, LR0item )
+                for(auto& tofrom__pair : prop_table.get_propagation(LR0set, LR0item ) )
                 {
+                    auto& to_setitem_pair=tofrom__pair.second;
                     item new_to_item=to_setitem_pair.second.copy( LR1item.lookahead );
                     if(not to_setitem_pair.first->has_item(new_to_item) )
                     {
@@ -1102,25 +1140,25 @@ void parser_generator::generate_parser_table()
             }
         }
     }
-    
-    
+
+
     //closure on each set of items to get the non-kernal items
     for( auto set : LR1_item_sets ) closure_LR1(set);
-    
+
     //generate table using algorithm 4.56
     state_table=shared_ptr< vector<parser_state> >( new vector<parser_state>() );
     state_table->resize(LR1_item_sets.size());
     item accept_item(*augmented_start->productions.begin(), 1, EOF_terminal);
     bool is_ambiguous=false;
-    for( unsigned int state_i=0; i<LR1_item_sets.size(), i++)
+    for( unsigned int state_i=0; state_i<LR1_item_sets.size(); state_i++)
     {
-        parser_state& current_state=*state_table[state_i];
+        parser_state& current_state=(*state_table)[state_i];
         auto set=LR1_item_sets[state_i];
-        
+
         //set the actions
         parser_action new_action=parser_action::get_none(); //I am not sure why this is here, and not up one level. Has something to do with ambiguity checking
         map<unsigned int, item> action_items;
-        for(item& set_item : set)
+        for(item& set_item : *set)
         {
             auto post_tokens=set_item.get_postTokens();
             token_ptr action_token;
@@ -1133,7 +1171,7 @@ void parser_generator::generate_parser_table()
             else if( post_tokens.size()==0 and set_item.lookahead->is_terminal )
             {
                 //reduce
-                new_action=parser_action::get_reduce(set_item.production->id);
+                new_action=parser_action::get_reduce(set_item.prod->id);
                 action_token=set_item.lookahead;
             }
             else if( (*post_tokens.begin())->is_terminal)
@@ -1141,15 +1179,15 @@ void parser_generator::generate_parser_table()
                 //shift
                 auto set_shift_to=set->get_goto( (*post_tokens.begin()) );
                 new_action=parser_action::get_shift(set_shift_to->id);
-                action_token=(*post_tokens.begin())
+                action_token=(*post_tokens.begin());
             }
-            
+
             if(not new_action.is_none() ) //the action was set
             {
                 bool tmp_ambiguous=false;
                 //check for conflicts
-                parser_action& old_action=current_state.action(action_token->id);
-                if( (not old_action.is_error()) and (not old_action==new_action) )
+                parser_action& old_action=current_state.get_action(action_token->token_ID);
+                if( (not old_action.is_error()) and (not (old_action==new_action)) )
                 //the actions are ambiguous
                 {
                     tmp_ambiguous=true;
@@ -1166,7 +1204,7 @@ void parser_generator::generate_parser_table()
                         if(old_action.is_shift())
                         {
                             shift_action=old_action;
-                            shift_item=action_items[action_token->id];
+                            shift_item=action_items[action_token->token_ID];
                             reduce_action=new_action;
                             reduce_item=set_item;
                         }
@@ -1175,9 +1213,9 @@ void parser_generator::generate_parser_table()
                             shift_action=new_action;
                             shift_item=set_item;
                             reduce_action=old_action;
-                            reduce_item=action_items[action_token->id];
+                            reduce_item=action_items[action_token->token_ID ];
                         }
-                        
+
                         if(reduce_item.prod->id == shift_item.prod->id) //try associatitivy
                         {
                             if(reduce_item.prod->is_left_associative()) //reduce
@@ -1209,64 +1247,64 @@ void parser_generator::generate_parser_table()
                             }
                         }
                     }
-                    
+
                     if(tmp_ambiguous)
                     //the grammer is ambiguous
                     {
                         log("AMBIGUOUS GRAMMER in state ",state_i,". conflict between action: ", old_action,
-                            " on item:",action_items[action_token.id], ", and action: ",new_action," on item:",set_item)
-                        is_ambiguous=true //we do not return here, becouse we want to list out all ambiguities
+                            " on item:",action_items[action_token->token_ID], ", and action: ",new_action," on item:",set_item);
+                        is_ambiguous=true; //we do not return here, becouse we want to list out all ambiguities
                     }
                 }
-                
+
                 if(not tmp_ambiguous)
                 {
                     current_state.add_action(action_token->token_ID, new_action);
                 }
             }
         }
-        
+
         //set the goto table
         for(auto& name_nonterm_pair : non_terminals)
         {
-            auto goto_set = set.get_goto(name_nonterm_pair.second);
+            auto goto_set = set->get_goto(name_nonterm_pair.second);
             if(goto_set) current_state.add_goto(name_nonterm_pair.second->token_ID, goto_set->id);
         }
     }
-    
-    
+
+
     //log the action table
     log();
-    for( unsigned int state_i=0; i<LR1_item_sets.size(), i++)
+    for( unsigned int state_i=0; state_i<LR1_item_sets.size(); state_i++)
     {
-        parser_state& current_state=*state_table[state_i];
+        parser_state& current_state=(*state_table)[state_i];
         log("STATE: ", state_i);
         log();
-        
+
         for( auto& ST_item : LR1_item_sets[state_i]->items)
         {
             log("  ", ST_item);
         }
         log();
-        
+
         for(auto&  id_action_pair : current_state.ACTION )
         {
-            log("  on ", *term_map[id_action_pair.first], " ", id_action_pair.second);
+            log("  on ", (*term_map)[id_action_pair.first], " ", id_action_pair.second);
         }
         log();
-        
-        for(auto& nonterm_state_pair in current_state.GOTO)
+
+        for(auto& nonterm_state_pair : current_state.GOTO)
         {
             log("  goto ", nonterm_state_pair.second, " on ", nonterm_map[nonterm_state_pair.first]);
         }
         log();
     }
-    
+
     if( is_ambiguous) return;
-    
+
     //compact action table
     //compact goto table (see pg 276-277)
-    
+
     parser_table_generated=true;
 }
 
