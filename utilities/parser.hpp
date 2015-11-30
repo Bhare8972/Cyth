@@ -30,6 +30,23 @@ Much of this is based off of the dragon book.
 #include "gen_ex.h"
 #include "lexer.hpp"
 #include "type_erasure.hpp"
+#include "iter_wrap.hpp"
+
+//TODO:
+//  add saving the tables into a file
+//  add error handeling
+//  add multiple starting non-terms
+//  remove epsilon terminal
+
+//Algorithm improvements:
+// in class item: replace get_PostTokens with two functions, one gives number of posttokens, and ond returns individual post-tokens based on index
+// when calculating LR0 closure, use something to keep track if a production was added or not. A boolean in the production, or an array
+// replace deque with list in appropriate places
+// fix propagation_table generation to loop over tokens last
+// test for slowdowns of copying token_data and item (espcially in propagation_table)
+// add parser table compaction
+
+
 
 //utilities for defining languege
 namespace csu{ //cyth standard utilities namespace
@@ -52,13 +69,25 @@ class token_data
     dyn_holder t_data;
     location_span span;
 public:
+    token_data(){}
     token_data(unsigned int _ID, dyn_holder _data, location_span _span);
 
-    template<typename ret_T>
-    ret_T data();
+    dyn_holder data()
+    {
+        return t_data;
+    }
 
     template<typename ret_T>
-    void data(ret_T& ret_data);
+    ret_T data()
+    {
+        return t_data.cast<ret_T>();
+    }
+
+    template<typename ret_T>
+    void data(ret_T& ret_data)
+    {
+        t_data.cast(ret_data);
+    }
 
     location_span loc();
 
@@ -71,25 +100,21 @@ class parser_function_class
 //a class that will encapsulate all actions that the parser takes
 {
 public:
-    virtual dyn_holder call(std::vector<token_data>& data)=0;
+    typedef iter_wrap<std::list<token_data> > data_T;
+
+    virtual dyn_holder call(data_T& data)=0;
 };
 typedef std::shared_ptr<parser_function_class> parser_function_ptr;
 
 template<typename return_T>
-class parser_functional : parser_function_class
+class parser_functional : public parser_function_class
 //inherits from parser_action_class to wrap around std::function
 {
-    std::function<return_T(std::vector<token_data>& )> func;
+    std::function<return_T(data_T& )> func;
 public:
-    parser_functional(std::function<return_T(std::vector<token_data>& )> _func){func=_func;}
-    virtual dyn_holder call(std::vector<token_data>& data) { return dyn_holder( func(data) ); }
+    parser_functional(std::function<return_T(data_T& )> _func){func=_func;}
+    virtual dyn_holder call(data_T& data) { return dyn_holder( func(data) ); }
 };
-
-//class lexer_function_class
-//{
-//public:
-//    virtual token_data operator()( utf8_string&, location_span&, lexer<token_data>* )=0;
-//};
 
 class lexer_function_generic //: public lexer_function_class
 {
@@ -121,20 +146,6 @@ public:
     }
 };
 
-//class lex_func_encapuslator
-//{
-//private:
-//    lexer_function_class* _func;
-//public:
-//    lex_func_encapsulator();
-//    lex_func_encapsulator(lexer_function_class* func);
-//    lex_func_encapsulator(lex_func_encapuslator& RHS);
-//    ~lex_func_encapsulator();
-//
-//    token_data operator()( utf8_string& data, location_span& loc, lexer<token_data>* lex);
-//    void operator=(lex_func_encapuslator& RHS);
-//};
-
 ///// tokens /////
 
 class token
@@ -148,6 +159,7 @@ public:
     unsigned int token_ID; //starts at 1. 0 means "unknown"
 
     token(){}
+    virtual ~token(){}
     token(utf8_string _name); //new unknown terminal
 
     //extra constructors are not needed, as mostly derived classes will be used
@@ -226,7 +238,7 @@ public:
     production(non_terminal* _L_val, std::vector<token_ptr>& _tokens);
 
     template<typename ret_type>
-    production& set_action(std::function<ret_type(std::vector<token_data>&)> _func)
+    production& set_action(std::function<ret_type(parser_function_class::data_T&)> _func)
     {
         parser_function_ptr new_parser_func(new parser_functional<ret_type>(_func));
         action=new_parser_func;
@@ -252,7 +264,7 @@ public:
     unsigned int L_val_ID;
     utf8_string L_val_name;
     unsigned int num_tokens;
-    parser_function_ptr action; //will need to see if we really need this
+    parser_function_ptr action;
 
     production_info(unsigned int _L_val_ID, utf8_string& _L_val_name, unsigned int _num_tokens, parser_function_ptr _action);
 };
@@ -262,6 +274,7 @@ typedef std::shared_ptr<production_info> production_info_ptr;
 class item
 {
     friend std::ostream& operator<<(std::ostream& os, const item& dt);
+    friend bool operator<(const item &LHS, const item &RHS);
 public:
     std::shared_ptr<production> prod;
     unsigned int loc;
@@ -279,9 +292,8 @@ public:
     item copy();
     item copy(token_ptr new_lookahead);
 
-    bool operator==(item& RHS);
+    bool operator==(const item& RHS) const;
 
-    I AM HERE NEED TO ADD LESS_THAN OPERATOR
 };
 
 class item_set
@@ -314,8 +326,8 @@ typedef std::shared_ptr<item_set> item_set_ptr;
 class propagation_table
 {
 private:
-    typedef std::pair< unsigned int, item& >  FROM_T;
-    typedef std::pair< item_set_ptr, item& >  TO_T;
+    typedef std::pair< unsigned int, item >  FROM_T;
+    typedef std::pair< item_set_ptr, item >  TO_T;
 
     class table_iterator
     //a class for looping over returns from the table
@@ -333,6 +345,8 @@ public:
 
     void add_propagation(item_set_ptr from_set, item& from_item, item_set_ptr to_set, item& to_item);
     table_iterator get_propagation(item_set_ptr from_set, item& from_item);
+
+    void print();
 };
 
 ///// parser_state /////
@@ -388,7 +402,7 @@ public:
     void set_default(parser_action _default);
 
     unsigned int get_goto(unsigned int _token_ID);
-    parser_action& get_action(unsigned int non_term);
+    parser_action get_action(unsigned int non_term);
 };
 
 class parser_generator
@@ -428,7 +442,7 @@ public:
     //void set_precedence(std::initializer_list<non_terminal_ptr> operators);
     void print_grammer();
 
-    std::shared_ptr<parser> get_parser();
+    std::shared_ptr<parser> get_parser(bool do_file_IO=true);
 
 private: //functions usefull for terminal and non_terminal
     friend class terminal;
@@ -451,6 +465,30 @@ private: //languege processing functions
     void generate_parser_table();
     void load_from_file();
     void load_to_file();
+};
+
+class parser
+{
+private:
+    lexer<token_data> lex;
+    std::shared_ptr< std::map<unsigned int, utf8_string> > term_map; //map terminal ID to terminal name
+    std::shared_ptr< std::vector<production_info_ptr> > production_information;
+    std::shared_ptr< std::vector<parser_state> > state_table;
+
+    std::list< token_data > stack;
+    token_data next_terminal;
+
+    void state_string(std::ostream& os);
+    int parse_step(bool reporting=false);
+
+public:
+    parser(lexer<token_data>& _lex, std::shared_ptr< std::map<unsigned int, utf8_string> > _term_map,
+           std::shared_ptr< std::vector<production_info_ptr> > _production_information, std::shared_ptr< std::vector<parser_state> > _state_table);
+
+    std::shared_ptr<parser> copy();
+    dyn_holder parse(bool reporting=false);
+    dyn_holder get_data();
+
 };
 
 }//end csu namespace

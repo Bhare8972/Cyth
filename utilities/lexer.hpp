@@ -211,6 +211,19 @@ public:
         input_buffer=std::shared_ptr<ring_buffer>(new ring_buffer(tmp));
     }
 
+    lexer( const lexer<return_type>& RHS)
+    {
+        continue_lexing_b=false;
+        lexer_state=0;
+        EOF_action=RHS.EOF_action;
+        state_table=RHS.state_table;
+        actions=RHS.actions;
+        lexer_states=RHS.lexer_states;
+        std::stringstream tmp;
+        input_buffer=std::shared_ptr<ring_buffer>(new ring_buffer(tmp));
+    }
+
+
     void print_machine()
     {
         unsigned int i=0;
@@ -564,13 +577,14 @@ private:
 
         unsigned int lexer_state=0;
         auto pattern_iter=patterns.begin();
+        auto pattern_end=patterns.end();
         while(lexer_state<=current_state) //loop over each potential state
         {
             std::list< std::shared_ptr<NFA_state> > NFA_of_lexerstate;
             std::shared_ptr<NFA_state> first_state(new NFA_state);
             NFA_of_lexerstate.push_back(first_state);
 
-            for(  ; pattern_iter->state==lexer_state; ++pattern_iter) //loop over each patern that is in the present lexer_state
+            for(  ; pattern_iter!= pattern_end and pattern_iter->state==lexer_state; ++pattern_iter) //loop over each patern that is in the present lexer_state
             {
                 unsigned int chars_counted=0;
                 auto regex_tree=parse_regex(pattern_iter->regular_expression, chars_counted);

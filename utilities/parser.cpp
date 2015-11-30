@@ -38,41 +38,6 @@ token_data lexer_function_generic::operator()( utf8_string& data, location_span&
     return ret;
 }
 
-////lex_func_encapuslator
-//lex_func_encapsulator::lex_func_encapsulator()
-//{
-//    _func=0;
-//}
-//
-//lex_func_encapsulator::lex_func_encapsulator(lexer_function_class* func)
-//{
-//    _func=func;
-//}
-//
-//lex_func_encapsulator::lex_func_encapsulator(lex_func_encapuslator& RHS)
-//{
-//    _func=RHS._func;
-//    RHS._func=0;
-//}
-//
-//lex_func_encapsulator::~lex_func_encapsulator()
-//{
-//    if(_func) delete _func;
-//}
-//
-//token_data lex_func_encapsulator::operator()( utf8_string& data, location_span& loc, lexer<token_data>* lex)
-//{
-//    if(not _func) throw gen_exception("cannot call lex_func_encapsulator with empty pointer");
-//
-//    return (*_func)(data, loc, lex);
-//}
-//
-//void lex_func_encapsulator::operator=(lex_func_encapuslator& RHS)
-//{
-//    _func=RHS._func;
-//    RHS._func=0;
-//}
-
 
 //begin token class
 token::token(utf8_string _name)
@@ -142,18 +107,6 @@ token_data::token_data(unsigned int _ID, dyn_holder _data, location_span _span)
     span=_span;
 }
 
-template<typename ret_T>
-ret_T token_data::data()
-{
-    return t_data.cast<ret_T>();
-}
-
-template<typename ret_T>
-void token_data::data(ret_T& ret_data)
-{
-    t_data.cast(ret_data);
-}
-
 location_span token_data::loc(){return span;}
 unsigned int token_data::get_ID(){return token_ID;}
 
@@ -197,6 +150,16 @@ production& production::set_associativity(utf8_string _assoc)
         throw gen_exception("unknown production association");
     }
     return *this;
+}
+
+bool production::is_left_associative()
+{
+    return assoc==LEFT;
+}
+
+bool production::is_right_associative()
+{
+    return assoc==RIGHT;
 }
 
 production& production::set_precedence()
@@ -258,7 +221,7 @@ bool item::is_kernal( non_terminal_ptr augmented_start)
 {
     if(loc!=0) return true;
 
-    if( (*augmented_start->productions.begin())->id == prod->id )
+    if( augmented_start->token_ID == prod->L_val->token_ID )
     {
         return true;
     }
@@ -285,7 +248,7 @@ item item::copy(token_ptr new_lookahead)
     return item(prod, loc, new_lookahead);
 }
 
-bool item::operator==(item& RHS)
+bool item::operator==(const item& RHS) const
 {
     if(not lookahead)
     {
@@ -305,20 +268,35 @@ bool item::operator==(item& RHS)
 
 ostream& csu::operator<<(ostream& os, const item& dt)
 {
-    cout<<dt.prod->L_val->name<<"->";
+    os<<dt.prod->L_val->name<<"->";
     for(unsigned int i=0; i<dt.prod->tokens.size(); i++)
     {
         if(i==dt.loc)
         {
-            cout<<'.';
+            os<<'.';
         }
-        cout<<(dt.prod->tokens[i]->name)<<" ";
+        os<<(dt.prod->tokens[i]->name)<<" ";
     }
 
-    if(dt.loc==dt.prod->tokens.size()) cout<<".";
+    if(dt.loc==dt.prod->tokens.size()) os<<".";
 
-    if(dt.lookahead) cout<<'['<<dt.lookahead->name<<']';
+    if(dt.lookahead) os<<'['<<dt.lookahead->name<<']';
     return os;
+}
+
+bool csu::operator<(const item &LHS, const item &RHS)
+{
+    if(LHS.prod<RHS.prod) return true;
+    if(LHS.prod>RHS.prod) return false;
+
+    if(LHS.loc<RHS.loc) return true;
+    if(LHS.loc>RHS.loc) return false;
+
+    if(LHS.lookahead<RHS.lookahead) return true;
+    if(LHS.lookahead>RHS.lookahead) return false;
+
+    //they are equal
+    return false;
 }
 
 //end item class
@@ -398,12 +376,12 @@ bool item_set::has_item(item& RHS)
 
 ostream& csu::operator<<(std::ostream& os, const item_set& dt)
 {
-    cout<<"SET: "<<dt.id<<endl;
+    os<<"SET: "<<dt.id<<endl;
     for(auto& has_item : dt.items )
     {
-        cout<<" "<<has_item<<endl;
+        os<<" "<<has_item<<endl;
     }
-    cout<<"END SET"<<endl;
+    os<<"END SET"<<endl;
     return os;
 }
 
@@ -427,6 +405,7 @@ propagation_table::table_iterator::iterator& propagation_table::table_iterator::
 
 void propagation_table::add_propagation(item_set_ptr from_set, item& from_item, item_set_ptr to_set, item& to_item)
 {
+
     FROM_T from_pair(from_set->id, from_item);
     TO_T to_pair(to_set, to_item);
 
@@ -438,6 +417,15 @@ propagation_table::table_iterator propagation_table::get_propagation(item_set_pt
     FROM_T from_pair(from_set->id, from_item);
     table_iterator ret( table.equal_range(from_pair) );
     return ret;
+}
+
+void propagation_table::print()
+{
+    for(auto& FROM_TO_PAIR : table)
+    {
+        cout<<"propagate from set "<<FROM_TO_PAIR.first.first<<" item: "<<FROM_TO_PAIR.first.second<<endl;
+        cout<<"  to set "<<FROM_TO_PAIR.second.first->id<<" item: "<<FROM_TO_PAIR.second.second<<endl<<endl;
+    }
 }
 
 //end propagation_table
@@ -550,7 +538,7 @@ unsigned int parser_state::get_goto(unsigned int _token_ID)
     return GOTO[_token_ID];
 }
 
-parser_action& parser_state::get_action(unsigned int non_term)
+parser_action parser_state::get_action(unsigned int non_term)
 {
     auto iter=ACTION.find(non_term);
     if(iter==ACTION.end())
@@ -576,9 +564,11 @@ parser_generator::parser_generator(utf8_string _parser_table_file_name, utf8_str
 
     EOF_terminal=terminal_ptr(new terminal("EOF", next_token_num, lex_gen.get()));
     next_token_num++;
+    terminals["EOF"]=EOF_terminal;
 
     EPSILON_terminal=terminal_ptr(new terminal("EPSILON", next_token_num, lex_gen.get()));
     next_token_num++;
+    terminals["EPSILON"]=EPSILON_terminal;
 
     lex_gen->set_EOF_action(lexer_function_generic(EOF_terminal->token_ID, true));
 }
@@ -665,16 +655,18 @@ void parser_generator::print_grammer()
     }
 }
 
-shared_ptr<parser> parser_generator::get_parser()
+shared_ptr<parser> parser_generator::get_parser(bool do_file_IO)
 {
-    //need to fill this in too
-    throw gen_exception("not implemented");
-}
+    if(not parser_table_generated)
+    {
+        //check for file
 
-//void parser_generator::add_lexer_pattern(utf8_string& regex_pattern, lexer_generator<token_data>::lex_func_t func)
-//{
-//    lex_gen->add_pattern(regex_pattern, func);
-//}
+        generate_parser_table();
+    }
+
+    lexer<token_data> new_lex=lex_gen->get_lexer(do_file_IO);
+    return shared_ptr<parser>(new parser(new_lex, term_map, production_information, state_table));
+}
 
 void parser_generator::resolve_unknown_terminal(token_ptr _new_terminal) //this is for when the terminal is referanced by a string
 {
@@ -741,7 +733,7 @@ list<token_ptr> parser_generator::first(list<token_ptr>& tokens)
     }
 
     //return
-    if(has_epsilon){ ret.push_back(EPSILON_terminal);}
+    //if(has_epsilon){ ret.push_back(EPSILON_terminal);}
     return ret;
 }
 
@@ -826,6 +818,7 @@ void parser_generator::closure_LR1(item_set_ptr input_set)
             {
                 non_terminal_ptr next_token( dynamic_pointer_cast<non_terminal>(*post_tokens_iterator) );
                 list<token_ptr> following_tokens(++post_tokens_iterator, post_tokens.end());
+                following_tokens.push_back(input_item.lookahead);
                 auto first_data=first(following_tokens);
                 for(auto prod : next_token->productions )
                 {
@@ -853,7 +846,7 @@ void parser_generator::closure_LR0(item_set_ptr input_set)
         for(item& input_item : *input_set)
         {
             vector<token_ptr> post_tokens( input_item.get_postTokens() );
-            if( post_tokens.size()>0 and  not post_tokens[0]->is_terminal)
+            if( post_tokens.size()>0 and not post_tokens[0]->is_terminal)
             {
                 non_terminal_ptr next_token= dynamic_pointer_cast<non_terminal>(post_tokens[0]);
 
@@ -891,6 +884,8 @@ item_set_ptr parser_generator::goto_LR0(item_set_ptr input_set, token_ptr _token
 
 list<item_set_ptr> parser_generator::LR0_itemsets(non_terminal_ptr _start_token)
 {
+    //use algorithm 4.6.2 to construct LR0_itemsets
+
     //check if an item_set is in a list
     auto in_list = [](list<item_set_ptr>& chk_list, item_set_ptr set) -> item_set_ptr
     {
@@ -962,12 +957,13 @@ void parser_generator::generate_parser_table()
     {
         throw gen_exception("need at least one production");
     }
-    non_terminal_ptr augmented_start= new_nonterminal("Augmented Start Token");
+    non_terminal_ptr augmented_start= new_nonterminal("start");
     augmented_start->add_production({start_nonterm});
 
     ////basic accounting////
     //terminal map
     log("terminals:");
+
     term_map= shared_ptr< map<unsigned int, utf8_string> >( new map<unsigned int, utf8_string>());
     for(auto name_term_pair : terminals)
     {
@@ -982,7 +978,7 @@ void parser_generator::generate_parser_table()
     //log the nonterms
     log("nonterminals:");
     map<unsigned int, utf8_string> nonterm_map;
-    unsigned int num_productions;
+    unsigned int num_productions=0;
     for(auto name_nonterm_pair : non_terminals)
     {
         log(name_nonterm_pair.second->token_ID, ": ", name_nonterm_pair.first);
@@ -999,7 +995,7 @@ void parser_generator::generate_parser_table()
     {
         for(auto prod : name_nonterm_pair.second->productions)
         {
-            log(prod->id, ": ", prod);
+            log(prod->id, ": ", *prod);
             (*production_information)[prod->id]=prod->get_info();
         }
     }
@@ -1008,10 +1004,11 @@ void parser_generator::generate_parser_table()
     ///// generate the parse table /////
     auto LR0_item_sets=LR0_itemsets(augmented_start);
 
-    //remove kernal items ?? (there is an extra not in here... it is removing non-kernal items)
+    //remove non-kernal items
     for( auto set : LR0_item_sets)
     {
-        set->items.erase( remove_if(set->items.begin(), set->items.end(), [&](item& it){return not it.is_kernal(augmented_start);}), set->items.end() );
+        //set->items.erase( remove_if(set->items.begin(), set->items.end(), [&](item& it){return not it.is_kernal(augmented_start);}), set->items.end() );
+        set->items.remove_if( [&](item& it){return not it.is_kernal(augmented_start);} );
     }
 
     //create new LR1 item stes from old LR0 item sets
@@ -1023,16 +1020,17 @@ void parser_generator::generate_parser_table()
     }
     for(auto LR0_set : LR0_item_sets) //duplicate the goto tables
     {
+        auto relavent_LR1_set=LR1_item_sets[LR0_set->id];
         for(auto& tokenID_set_pair : LR0_set->goto_table)
         {
             auto LR1_goto_set=LR1_item_sets[ tokenID_set_pair.second->id ];
-            LR1_item_sets[LR0_set->id]->goto_table[ tokenID_set_pair.first ]=LR1_goto_set;
+            relavent_LR1_set->goto_table[ tokenID_set_pair.first ]=LR1_goto_set;
         }
     }
 
     //algorithm 4.62 Generate propagation table and spontanious lookaheads
     propagation_table prop_table;
-    terminal_ptr fake_terminal("fakeTerm", next_token_num, this);
+    terminal_ptr fake_terminal( new terminal("#", next_token_num, lex_gen.get()));
     next_token_num++;
     for(auto set_K : LR0_item_sets)
     {
@@ -1070,7 +1068,7 @@ void parser_generator::generate_parser_table()
                 }
             }
         }
-        for(auto& name_nonterm_pair : terminals)
+        for(auto& name_nonterm_pair : non_terminals)
         {
             auto nonterm_X=name_nonterm_pair.second;
             auto LR0_goto_set=set_K->get_goto(nonterm_X);
@@ -1109,10 +1107,10 @@ void parser_generator::generate_parser_table()
     //add EOF to augmented_start production
     for(item& LR0_item : *(*LR0_item_sets.begin()))
     {
-        if(LR0_item.prod->id==augmented_start->token_ID and LR0_item.loc==0)
+        if(LR0_item.prod->L_val->token_ID==augmented_start->token_ID and LR0_item.loc==0)
         {
             item new_item=LR0_item.copy(EOF_terminal);
-            (*LR0_item_sets.begin())->append(new_item);
+            LR1_item_sets[0]->append(new_item);
         }
     }
 
@@ -1123,7 +1121,7 @@ void parser_generator::generate_parser_table()
         items_added=false;
         for(auto LR1set : LR1_item_sets)
         {
-            item_set_ptr LR0set=*find_if(LR0_item_sets.begin(), LR0_item_sets.end(), [=](const item_set_ptr A ){return A->id==LR1set->id;});
+            item_set_ptr LR0set=*find_if(LR0_item_sets.begin(), LR0_item_sets.end(), [=](const item_set_ptr A ){return A->id==LR1set->id;});//ouch
             for(item& LR1item : *LR1set)
             {
                 item LR0item=LR1item.copy( token_ptr() );
@@ -1141,7 +1139,6 @@ void parser_generator::generate_parser_table()
         }
     }
 
-
     //closure on each set of items to get the non-kernal items
     for( auto set : LR1_item_sets ) closure_LR1(set);
 
@@ -1156,12 +1153,12 @@ void parser_generator::generate_parser_table()
         auto set=LR1_item_sets[state_i];
 
         //set the actions
-        parser_action new_action=parser_action::get_none(); //I am not sure why this is here, and not up one level. Has something to do with ambiguity checking
         map<unsigned int, item> action_items;
         for(item& set_item : *set)
         {
             auto post_tokens=set_item.get_postTokens();
             token_ptr action_token;
+            parser_action new_action=parser_action::get_none();
             if(set_item==accept_item)
             {
                 //accept
@@ -1186,7 +1183,7 @@ void parser_generator::generate_parser_table()
             {
                 bool tmp_ambiguous=false;
                 //check for conflicts
-                parser_action& old_action=current_state.get_action(action_token->token_ID);
+                parser_action old_action=current_state.get_action(action_token->token_ID);
                 if( (not old_action.is_error()) and (not (old_action==new_action)) )
                 //the actions are ambiguous
                 {
@@ -1260,6 +1257,7 @@ void parser_generator::generate_parser_table()
                 if(not tmp_ambiguous)
                 {
                     current_state.add_action(action_token->token_ID, new_action);
+                    action_items[action_token->token_ID]=set_item;
                 }
             }
         }
@@ -1300,6 +1298,8 @@ void parser_generator::generate_parser_table()
         log();
     }
 
+    log.write("cyth_grammer.txt");
+
     if( is_ambiguous) return;
 
     //compact action table
@@ -1308,5 +1308,170 @@ void parser_generator::generate_parser_table()
     parser_table_generated=true;
 }
 
-
 //end parser_generator class
+
+
+//begin parser class
+parser::parser(lexer<token_data>& _lex, shared_ptr< map<unsigned int, utf8_string> > _term_map,
+       shared_ptr< vector<production_info_ptr> > _production_information, shared_ptr< vector<parser_state> > _state_table) : lex(_lex)
+{
+   term_map=_term_map;
+   production_information=_production_information;
+   state_table=_state_table;
+}
+
+shared_ptr<parser> parser::copy()
+{
+    return shared_ptr<parser>( new parser(lex, term_map, production_information, state_table));
+}
+
+dyn_holder parser::parse(bool reporting)
+{
+    stack.clear();
+    //stack.push_back( token_data() );
+    next_terminal=lex();
+
+    int state=0;
+    while(state==0)
+    {
+        state=parse_step(reporting);
+    }
+    if(state==1)
+    {
+        return get_data();
+    }
+    else
+    {
+        return dyn_holder();
+    }
+}
+
+dyn_holder parser::get_data()
+{
+    return (--stack.end())->data();
+}
+
+int parser::parse_step(bool reporting)
+{
+    if(reporting)
+    {
+        cout<<"NEXT TERMINAL: "<< (*term_map)[ next_terminal.get_ID() ];
+    }
+
+    parser_state& state=(*state_table)[ stack.back().get_ID() ];
+    parser_action action=state.get_action( next_terminal.get_ID() );
+
+    if( action.is_error() )
+    {
+        cout<<"parsing error- expected one of: ";
+        for(auto& ID_action_pair : state.ACTION)
+        {
+            cout<< (*term_map)[ ID_action_pair.first ]<< ',';
+        }
+        cout<<" Got a "<< (*term_map)[next_terminal.get_ID()]<< '.' << next_terminal.loc()<<endl;
+
+        if( reporting )
+        {
+            cout<<"  ERROR"<<endl<<"  STACK";
+            state_string(cout);
+        }
+
+        //do not try to recover from error, yet
+        return 2;
+    }
+
+    else if( action.is_reduce())
+    {
+        if( reporting )
+        {
+            cout<<"  REDUCING BY PRODUCTION: "<< action.get_data()<<endl;
+        }
+
+        //// get important data ////
+        auto prod_info=(*production_information)[action.get_data()];
+        parser_function_class::data_T arguments(prod_info->num_tokens, stack.end());
+        token_data& current_state_data = *(--stack.end());
+
+        //// make new location_span ////
+        location_span new_data_span=arguments[0].loc() + current_state_data.loc();
+
+        //// run user action ////
+        dyn_holder new_data = prod_info->action->call(arguments);
+
+        //// make new state ////
+        unsigned int new_state_id = (*state_table)[current_state_data.get_ID()].GOTO[ prod_info->L_val_ID ];
+        token_data new_state(new_state_id, new_data, new_data_span);
+
+
+        //// pop old states off the stack ////
+        //this is done last, becouse it destroys all the information we need
+        for(unsigned int x=0; x<prod_info->num_tokens; x++) stack.pop_back();
+
+        ////push the new state ////
+        stack.push_back(new_state);
+
+        if(reporting)
+        {
+            cout<<"  STACK: ";
+            state_string(cout);
+            cout<<endl;
+        }
+
+        return 0;
+    }
+
+    else if(action.is_shift())
+    {
+        if(reporting)
+        {
+            cout<<"  SHIFTING TERMINAL"<<endl;
+        }
+
+        unsigned int state_id=action.get_data();
+        token_data new_state(state_id, next_terminal.data(), next_terminal.loc() );
+        stack.push_back(new_state);
+        next_terminal=lex();
+        if(reporting)
+        {
+            cout<<"  STACK: ";
+            state_string(cout);
+            cout<<endl;
+        }
+        return 0;
+    }
+    else if(action.is_accept())
+    {
+        if(reporting)
+        {
+            cout<<"  PARSING COMPLETE"<<endl;
+            cout<<"  STACK: ";
+            state_string(cout);
+            cout<<endl;
+        }
+        return 0;
+    }
+    else
+    {
+        throw general_exception("ERROR: UNSET ACTION");
+
+        if( reporting )
+        {
+            cout<<"  ERROR: UNSET ACTION"<<endl<<"  STACK";
+            state_string(cout);
+        }
+
+        //do not try to recover from error, yet
+        return 2;
+    }
+}
+
+void parser::state_string(std::ostream& os)
+{
+    os<<'[';
+    for( auto& state : stack)
+    {
+        os<<state.get_ID()<<' ';
+    }
+    os<<']';
+}
+

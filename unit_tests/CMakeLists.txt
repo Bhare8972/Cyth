@@ -19,6 +19,7 @@ add_executable(CSU_unit_tests
               ./lexer_test.cpp
               ./parser_test.cpp
               ${utils}/lexer.cpp
+              ${utils}/logger.cpp
               ${utils}/regex.cpp
               ${utils}/UTF8.cpp
               ${utils}/parser.cpp)

@@ -83,9 +83,9 @@ location_span::location_span(const location_span& RHS)
 
 location_span::location_span(){}
 
-location_span operator +(const location_span& LHS, const location_span& RHS)
+location_span csu::operator+(const location_span& LHS, const location_span& RHS)
 {
-    return location_span(RHS.start, RHS.end);
+    return location_span(LHS.start, RHS.end);
 }
 
 ostream& csu::operator<<(ostream& os, const location_span& dt)

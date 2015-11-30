@@ -17,7 +17,7 @@ limitations under the License.
 logger class utility
 */
 
-#include "lexer.hpp"
+#include "logger.hpp"
 #include <fstream>
 
 
@@ -29,10 +29,11 @@ using namespace csu;
 void logger::write(string fname)
 {
     ofstream out(fname);
-    for(auto& output : data)
-    {
-        out<<output;
-    }
+    out<<(*this);
+//    for(auto& output : data)
+//    {
+//        out<<output;
+//    }
 }
 
 std::ostream& csu::operator<<(std::ostream& os, const logger& dt)
