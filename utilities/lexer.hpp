@@ -350,7 +350,6 @@ public:
                 throw lexer_exception("Could not read token(", data, ") at ", span);
             }
         }
-
     }
 };
 
@@ -606,7 +605,6 @@ private:
 
             std::list< std::shared_ptr<DFA_state> > DFA_states=NFA_to_DFA(NFA_of_lexerstate);
             DFA_states=DFA_minimization(DFA_states);
-
 
             current_lexer_states.push_back(current_state_table.size());
             current_state_table.insert(current_state_table.end(), DFA_states.begin(), DFA_states.end() );

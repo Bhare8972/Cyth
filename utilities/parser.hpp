@@ -55,6 +55,8 @@ namespace csu{ //cyth standard utilities namespace
 
 class parser_generator; //pre-declare the parser-generator
 
+class non_terminal;
+
 class production; //productions show how to get from a list of terminals to a non-terminal...ish
 class production_info;//hold data from a production, for the final parser
 
@@ -160,7 +162,6 @@ public:
 
     token(){}
     virtual ~token(){}
-    token(utf8_string _name); //new unknown terminal
 
     //extra constructors are not needed, as mostly derived classes will be used
 };
@@ -174,6 +175,7 @@ private:
 
 public:
     terminal(utf8_string _name, unsigned int ID, lexer_generator<token_data>* _lex_gen);
+    terminal(utf8_string _name); //new unknown terminal
 
     //functions to add patterns
     void add_pattern(utf8_string pattern, bool return_data=true); //add a patern that either returns, or doesn't. with data as string
@@ -198,6 +200,20 @@ public:
 };
 typedef std::shared_ptr<terminal> terminal_ptr;
 
+class token_string_converter
+// this class allows C++ to implicitly convert from a string to a undefined token.
+// it is necisary for the add_production function above to work appropriately
+{
+    public:
+    token_ptr data;
+
+    token_string_converter(const char* _data);
+    token_string_converter(std::shared_ptr<non_terminal> _data);
+    token_string_converter(token_ptr _data);
+    token_string_converter(terminal_ptr _data);
+    operator token_ptr() const;
+};
+
 class non_terminal : public token
 {
 private:
@@ -207,7 +223,7 @@ public:
 
     non_terminal(utf8_string _name, unsigned int ID, parser_generator* _par_gen);
 
-    production& add_production(std::initializer_list< token_ptr > tokens);
+    production& add_production(std::initializer_list< token_string_converter > tokens);
 };
 typedef std::shared_ptr<non_terminal> non_terminal_ptr;
 
@@ -488,6 +504,10 @@ public:
     std::shared_ptr<parser> copy();
     dyn_holder parse(bool reporting=false);
     dyn_holder get_data();
+
+    void reset_input(utf8_string& file_name);
+    void reset_input(const std::istream& _input);
+    void reset();
 
 };
 

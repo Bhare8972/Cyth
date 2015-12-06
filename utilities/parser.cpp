@@ -32,7 +32,7 @@ lexer_function_generic::lexer_function_generic(unsigned int _ID, bool _return_da
 
 token_data lexer_function_generic::operator()( utf8_string& data, location_span& loc, lexer<token_data>* lex)
 {
-    lex->continue_lexing(return_data);
+    lex->continue_lexing(not return_data);
     dyn_holder new_data(data);
     token_data ret(terminal_ID, new_data, loc);
     return ret;
@@ -40,13 +40,6 @@ token_data lexer_function_generic::operator()( utf8_string& data, location_span&
 
 
 //begin token class
-token::token(utf8_string _name)
-{
-    name=_name;
-    is_terminal=true;
-    token_ID=0;
-}
-
 ostream& csu::operator<<(ostream& os, const token& dt)
 {
     os<<dt.name;
@@ -63,6 +56,13 @@ terminal::terminal(utf8_string _name, unsigned int ID, lexer_generator<token_dat
     lex_gen=_lex_gen;
 }
 
+terminal::terminal(utf8_string _name)
+{
+    name=_name;
+    is_terminal=true;
+    token_ID=0;
+}
+
 void terminal::add_pattern(utf8_string pattern, bool return_data)
 {
     lexer_function_generic new_lex_func(token_ID, return_data);
@@ -70,6 +70,35 @@ void terminal::add_pattern(utf8_string pattern, bool return_data)
     lex_gen->add_pattern(pattern, lex_func);
 }
 //end terminal class
+
+//start token_string_converter class
+token_string_converter::token_string_converter(const char* _data)
+{
+    data=token_ptr(new terminal(_data));
+}
+
+token_string_converter::token_string_converter(token_ptr _data)
+{
+    data=_data;
+}
+
+token_string_converter::token_string_converter(terminal_ptr _data)
+{
+    data=_data;
+}
+
+token_string_converter::token_string_converter( non_terminal_ptr _data)
+{
+    data=_data;
+}
+
+
+token_string_converter::operator token_ptr() const
+{
+    return data;
+}
+
+//end token_string_converter
 
 //non_terminal
 non_terminal::non_terminal(utf8_string _name, unsigned int ID, parser_generator* _par_gen)
@@ -80,16 +109,21 @@ non_terminal::non_terminal(utf8_string _name, unsigned int ID, parser_generator*
     token_ID=ID;
 }
 
-production& non_terminal::add_production(std::initializer_list<token_ptr> tokens)
+production& non_terminal::add_production(std::initializer_list<token_string_converter> tokens)
 {
-    vector<token_ptr> _tokens(tokens);
+    vector<token_ptr> _tokens;
+    _tokens.reserve(tokens.size());
     //check for unknown tokens
-    for(token_ptr _token : _tokens)
+    for(token_string_converter _token : tokens)
     {
-        if(_token->token_ID==0)//found an unknown token
+        token_ptr new_token(_token);
+
+        if(new_token->token_ID==0)//found an unknown token
         {
-            par_gen->resolve_unknown_terminal(_token);//make it known
+            par_gen->resolve_unknown_terminal(new_token);//make it known
         }
+
+        _tokens.push_back(new_token);
     }
     //make the new production
     std::shared_ptr< production > new_production(new production(this, _tokens));
@@ -335,7 +369,10 @@ shared_ptr<item_set> item_set::get_goto(token_ptr _token)
 
 bool item_set::operator==(item_set& RHS)
 {
-    if(RHS.size()!=size()) return false;
+    if(RHS.size()!=size())
+    {
+        return false;
+    }
 
     for(auto this_iter=items.begin(), RHS_iter=RHS.items.begin(), this_end=items.end(); this_iter!=this_end; ++this_iter)
     {
@@ -343,7 +380,9 @@ bool item_set::operator==(item_set& RHS)
         {
             return false;
         }
+        ++RHS_iter;
     }
+
     return true;
 }
 
@@ -913,15 +952,17 @@ list<item_set_ptr> parser_generator::LR0_itemsets(non_terminal_ptr _start_token)
         {
             auto term=name_term_pair.second;
             auto new_goto=goto_LR0(set, term);
+            if(new_goto->size()==0) continue;
+
             item_set_ptr _in_list=in_list(item_sets, new_goto);
-            if(new_goto->size()>0 and not _in_list)
+            if(not _in_list)
             {
                 new_goto->id=next_set_ID;
                 next_set_ID++;
                 set->add_goto(term, new_goto);
                 item_sets.push_back(new_goto);
             }
-            else if( _in_list )
+            else
             {
                 set->add_goto(term, _in_list);
             }
@@ -931,15 +972,16 @@ list<item_set_ptr> parser_generator::LR0_itemsets(non_terminal_ptr _start_token)
         {
             auto nonterm=name_nonterm_pair.second;
             auto new_goto=goto_LR0(set, nonterm);
+            if(new_goto->size()==0) continue;
             item_set_ptr _in_list=in_list(item_sets, new_goto);
-            if(new_goto->size()>0 and not _in_list)
+            if(not _in_list)
             {
                 new_goto->id=next_set_ID;
                 next_set_ID++;
                 set->add_goto(nonterm, new_goto);
                 item_sets.push_back(new_goto);
             }
-            else if( _in_list )
+            else
             {
                 set->add_goto(nonterm, _in_list);
             }
@@ -965,7 +1007,7 @@ void parser_generator::generate_parser_table()
     log("terminals:");
 
     term_map= shared_ptr< map<unsigned int, utf8_string> >( new map<unsigned int, utf8_string>());
-    for(auto name_term_pair : terminals)
+    for(auto& name_term_pair : terminals)
     {
         log(name_term_pair.second->token_ID, ": ", name_term_pair.first);
         (*term_map)[name_term_pair.second->token_ID]=name_term_pair.first;
@@ -979,7 +1021,7 @@ void parser_generator::generate_parser_table()
     log("nonterminals:");
     map<unsigned int, utf8_string> nonterm_map;
     unsigned int num_productions=0;
-    for(auto name_nonterm_pair : non_terminals)
+    for(auto& name_nonterm_pair : non_terminals)
     {
         log(name_nonterm_pair.second->token_ID, ": ", name_nonterm_pair.first);
         nonterm_map[name_nonterm_pair.second->token_ID]=name_nonterm_pair.first;
@@ -1328,7 +1370,7 @@ shared_ptr<parser> parser::copy()
 dyn_holder parser::parse(bool reporting)
 {
     stack.clear();
-    //stack.push_back( token_data() );
+    stack.push_back( token_data(0, dyn_holder(), location_span() ) ); //push state 0
     next_terminal=lex();
 
     int state=0;
@@ -1355,7 +1397,7 @@ int parser::parse_step(bool reporting)
 {
     if(reporting)
     {
-        cout<<"NEXT TERMINAL: "<< (*term_map)[ next_terminal.get_ID() ];
+        cout<<"NEXT TERMINAL: "<< (*term_map)[ next_terminal.get_ID() ]<<endl;
     }
 
     parser_state& state=(*state_table)[ stack.back().get_ID() ];
@@ -1389,25 +1431,25 @@ int parser::parse_step(bool reporting)
 
         //// get important data ////
         auto prod_info=(*production_information)[action.get_data()];
-        parser_function_class::data_T arguments(prod_info->num_tokens, stack.end());
-        token_data& current_state_data = *(--stack.end());
 
-        //// make new location_span ////
-        location_span new_data_span=arguments[0].loc() + current_state_data.loc();
+        ////pop the states off of the stack
+        auto datum=pop_end_elements(stack, prod_info->num_tokens);
 
-        //// run user action ////
+        if(datum.size()==0)//this should never be called. NOt going to worry about it
+        {
+            cout<<"problem in parser, needs to be fixed"<<endl;
+        }
+
+        ////run user action
+        parser_function_class::data_T arguments(datum);
         dyn_holder new_data = prod_info->action->call(arguments);
 
-        //// make new state ////
-        unsigned int new_state_id = (*state_table)[current_state_data.get_ID()].GOTO[ prod_info->L_val_ID ];
+        //// make new location_span ////
+        location_span new_data_span=datum.front().loc() + datum.back().loc();
+
+        //// make a new state
+        unsigned int new_state_id = (*state_table)[stack.back().get_ID()].get_goto( prod_info->L_val_ID );
         token_data new_state(new_state_id, new_data, new_data_span);
-
-
-        //// pop old states off the stack ////
-        //this is done last, becouse it destroys all the information we need
-        for(unsigned int x=0; x<prod_info->num_tokens; x++) stack.pop_back();
-
-        ////push the new state ////
         stack.push_back(new_state);
 
         if(reporting)
@@ -1448,7 +1490,7 @@ int parser::parse_step(bool reporting)
             state_string(cout);
             cout<<endl;
         }
-        return 0;
+        return 1;
     }
     else
     {
@@ -1473,5 +1515,24 @@ void parser::state_string(std::ostream& os)
         os<<state.get_ID()<<' ';
     }
     os<<']';
+}
+
+void parser::reset_input(utf8_string& file_name)
+{
+    reset();
+    lex.set_input(file_name);
+}
+
+void parser::reset_input(const std::istream& _input)
+{
+    reset();
+    lex.set_input(_input);
+}
+
+void parser::reset()
+{
+    stack.clear();
+    next_terminal=token_data();
+    lex.reset();
 }
 

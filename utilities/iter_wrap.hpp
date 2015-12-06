@@ -39,7 +39,7 @@ private:
 
 public:
 
-    iter_wrap(const container& cont)
+    iter_wrap(container& cont)
     {
         location=0;
         present_location_iter=cont.begin();
@@ -141,6 +141,21 @@ public:
     }
 
 };
+
+////some helper functions for cutting items of end of list
+//// works with any container that has a splice
+
+template<typename container>
+container pop_end_elements(container& cont, unsigned int num_elems)
+{
+    auto range_start = cont.end();
+
+    for(unsigned int x=0; x<num_elems; x++) --range_start;
+
+    container ret;
+    ret.splice(ret.begin(), cont, range_start, cont.end());
+    return ret;
+}
 
 }//end csu namespace
 #endif
