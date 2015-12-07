@@ -132,6 +132,8 @@ public:
 
     utf8_string(const char* input);
 
+    utf8_string(code_point& input);
+
     ~utf8_string();
 
     //to and from cpp_string

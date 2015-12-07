@@ -155,12 +155,16 @@ class token
 {
 private:
     friend std::ostream& operator<<(std::ostream& os, const token& dt);
+
+
+
 public:
     utf8_string name;
     bool is_terminal;
     unsigned int token_ID; //starts at 1. 0 means "unknown"
+    token(){ }
 
-    token(){}
+    //token(){ }
     virtual ~token(){}
 
     //extra constructors are not needed, as mostly derived classes will be used

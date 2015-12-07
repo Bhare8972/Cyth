@@ -803,6 +803,8 @@ list<token_ptr> parser_generator::first_single(token_ptr _token, list<unsigned i
                 continue;
             }
 
+            exclusion_productions.push_back(prod->id);
+
             bool production_is_all_epsilons=true;
             for(auto p_token : prod->tokens)
             {
@@ -812,7 +814,7 @@ list<token_ptr> parser_generator::first_single(token_ptr _token, list<unsigned i
                 if(p_token->token_ID==_token->token_ID)
                 {
                     list<unsigned int> new_exclusions=exclusion_productions;
-                    new_exclusions.push_back(prod->id);
+                    //new_exclusions.push_back(prod->id);
                     p_token_first=first_single(p_token, new_exclusions, p_token_epsilon);
                 }
                 else

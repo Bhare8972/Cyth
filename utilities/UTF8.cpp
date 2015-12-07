@@ -465,6 +465,15 @@ utf8_string::utf8_string(const char* input)
     from_cpp_string(str_in);
 }
 
+utf8_string::utf8_string(code_point& input)
+{
+    length=1;
+    capacity=1;
+    points=new code_point[1];
+
+    points[0]=input;
+}
+
 utf8_string::~utf8_string()
 {
     if( points )

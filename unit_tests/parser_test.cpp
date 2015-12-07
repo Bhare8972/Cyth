@@ -40,7 +40,7 @@ TEST_CASE( "test parser", "[parser, lexer]" )
     NUM_nonterm->add_production({ ADDITION_nonterm })      .set_action< int >( return_one );
     NUM_nonterm->add_production({ MULTIPLICATION_nonterm }).set_action< int >( return_one );
 
-    MULTIPLICATION_nonterm->add_production({NUM_nonterm, "*", NUM_nonterm}).set_associativity("LEFT").set_precedence().set_action< int >( return_one );
+    MULTIPLICATION_nonterm->add_production({NUM_nonterm, "A", NUM_nonterm}).set_associativity("LEFT").set_precedence().set_action< int >( return_one );
     ADDITION_nonterm->add_production({NUM_nonterm, "+", NUM_nonterm}).set_associativity("RIGHT").set_precedence().set_action< int >( return_one );
 
     //set other lexer actions
