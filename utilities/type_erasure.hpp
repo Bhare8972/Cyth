@@ -23,6 +23,7 @@ Inspired by any.cpp by Christipher Diggins.
 #include <list>
 #include <type_traits>
 #include <tuple>
+#include <functional>
 
 namespace csu{ //cyth standard utillities namespace
 
@@ -442,4 +443,182 @@ combine dyn_holder and dyn_method
 * extend both of them to support basic operators. (or error otherwise, using enable_if)
 * create a new, extended, type that holds a dictionary to multiple methods, creating a python-like type that can hold C++ classes
 */
+
+//special structs for unwraping function arguments
+template<int N>
+struct apply_wrap_func
+{
+    template<typename func_return, typename... func_args, typename unpackedArg, typename... ArgsToUnpack, typename... UnpackedArgs>
+    static dyn_holder deravel(std::function<func_return (func_args...)> func, type_holder<unpackedArg, ArgsToUnpack...> t, std::list<dyn_holder>::iterator next_arg,
+                                 std::list<dyn_holder>::iterator end_args, UnpackedArgs... args )
+    {
+        if(next_arg==end_args) throw wrong_num_args();
+
+        unpackedArg new_arg;
+        next_arg->cast(new_arg);
+
+        ++next_arg;
+
+        return apply_wrap_func<N-1>::deravel(func, t.get_following(), next_arg, end_args, args... , new_arg);
+    }
+};
+
+template<>
+struct apply_wrap_func<1>
+{
+    template<typename func_return, typename...func_args, typename unpackedArg, typename... UnpackedArgs>
+    static dyn_holder deravel(std::function<func_return (func_args...)> func, type_holder<unpackedArg> t, std::list<dyn_holder>::iterator next_arg,
+                                 std::list<dyn_holder>::iterator end_args, UnpackedArgs... args )
+    {
+        if(next_arg==end_args) throw wrong_num_args();
+
+        unpackedArg new_arg;
+        next_arg->cast(new_arg);
+
+        ++next_arg;
+
+        if(next_arg !=end_args) throw wrong_num_args();
+
+        return dyn_holder(func(args...,new_arg));
+    }
+};
+
+template<>
+struct apply_wrap_func<0>
+{
+    template<typename func_return, typename...func_args, typename... ArgsToUnpack>
+    static dyn_holder deravel(std::function<func_return (func_args...)> func, type_holder<ArgsToUnpack...>& t, std::list<dyn_holder>::iterator next_arg,
+                                 std::list<dyn_holder>::iterator end_args)
+    {
+
+        if(next_arg !=end_args) throw wrong_num_args();
+
+        return dyn_holder(func());
+    }
+};
+
+//tools for converting lambdas and such into std::function
+//I do not know how this works
+template<typename T>
+struct memfun_type
+{
+    using type = void;
+};
+
+template<typename Ret, typename Class, typename... Args>
+struct memfun_type<Ret(Class::*)(Args...) const>
+{
+    using type = std::function<Ret(Args...)>;
+};
+
+template<typename F>
+typename memfun_type<decltype(&F::operator())>::type
+FFL(F const &func)
+{ // Function from lambda !
+    return func;
+}
+
+class dyn_func
+//a type erasure wrapper around std::function
+{
+private:
+    class base_func
+    {
+        public:
+        virtual dyn_holder call_func(std::list<dyn_holder>& arguments)=0; //call function with many arguments
+        virtual ~base_func(){}; 
+    };
+    
+    template<typename func_return, typename...func_args>
+    class func_type : public base_func
+    {
+    private:
+        std::function<func_return (func_args...)> func;
+    public:
+        func_type(std::function<func_return (func_args...)> _func)
+        {
+            func=_func;
+        }
+        ~func_type(){}
+        
+        dyn_holder call_func(std::list<dyn_holder>& arguments)
+        {
+            //return call_deravel<argsT...>(cls, arguments.begin(), arguments.end());
+            type_holder<func_args...> t;
+            return apply_wrap_func<sizeof...(func_args)>::deravel(func, t, arguments.begin(), arguments.end());
+        }
+    };
+    
+    std::shared_ptr<base_func> erased_func;
+    
+    template<typename func_return, typename...func_args>//set from a std::function
+    void set(std::function<func_return (func_args...)> _func)
+    {
+        erased_func=std::shared_ptr<base_func>(new func_type<func_return, func_args...>(_func));
+    }
+    
+public:
+    dyn_func()
+    {
+        erased_func=0;
+    }
+    
+    template<typename func_return, typename...func_args>//construct from a std::function
+    dyn_func(std::function<func_return (func_args...)> _func)
+    {
+        erased_func=std::shared_ptr<base_func>(new func_type<func_return, func_args...>(_func));
+    }
+    
+    template <typename func_return, typename...func_args> //const from a function pointer
+    dyn_func( func_return(*_func)(func_args...) )
+    {
+        auto _stdF=std::function<func_return(func_args...)>(_func);
+        erased_func=std::shared_ptr<base_func>(new func_type<func_return, func_args...>(_stdF));
+    }
+    
+    template<typename object_T, typename func_return, typename...func_args> //construct from a method
+    dyn_func(object_T& obj, func_return(object_T::*method)(func_args...))
+    {
+        std::function<func_return(func_args...)> _stdF( std::bind(method, &obj, std::placeholders::_1, std::placeholders::_2) );
+        erased_func=std::shared_ptr<base_func>(new func_type<func_return, func_args...>(_stdF));
+    } 
+    
+    template<typename F> //construct from a lambda function
+    dyn_func(F const &func)
+    {
+        set(FFL(func));
+    } 
+    
+    dyn_func(const dyn_func& to_copy)
+    {
+        erased_func=to_copy.erased_func;
+    }
+    
+    dyn_func& operator=(const dyn_func& to_copy)
+    {
+        erased_func=to_copy.erased_func;
+        return *this;
+    }
+    
+    dyn_holder operator()()
+    {
+        auto tmp=std::list<dyn_holder>();
+        return erased_func->call_func(tmp);
+    }
+    
+    dyn_holder operator()(std::list<dyn_holder>& arguments)
+    {
+        return erased_func->call_func(arguments);
+    }
+    
+    template<typename...argument_types>
+    dyn_holder operator()(argument_types...args)
+    //a special function to pack arguments into a list
+    {
+        std::list<dyn_holder> arguments;
+        varargs_to_list(arguments, args...);
+        return erased_func->call_func(arguments);
+    }
+};
+
 }//end namespace

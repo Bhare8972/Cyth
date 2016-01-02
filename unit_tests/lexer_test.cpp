@@ -25,7 +25,7 @@ TEST_CASE( "test lexer", "[lexer]" )
 {
 //note:
 //not a real unit test, becouse UTF8, regex, and ring_buffer do not have any unit tests
-    
+
     lexer_generator<int> gen("./lexer_table_test");
 
     gen.set_EOF_action(lex_int(-1));
@@ -68,15 +68,15 @@ TEST_CASE( "test lexer", "[lexer]" )
     REQUIRE(lex()==2); //we get a comment
     INFO("seventh test")
     REQUIRE(lex()==-1); //and an EOF
-    
+
     gen.load_from_file(); //force the lexer generator to get new lexer info from the file
     auto new_lex=gen.get_lexer();
-    
+
     stringstream new_src;
     new_src<<"qq qqq   qqqqq"<<endl;
     new_src<<"   .5654 3423.432 \\\\ comments"<<endl;
     new_lex.set_input(new_src);
-    
+
     INFO("first B test")
     REQUIRE(new_lex()==1);
     INFO("second B test")
@@ -91,6 +91,6 @@ TEST_CASE( "test lexer", "[lexer]" )
     REQUIRE(new_lex()==2); //we get a comment
     INFO("seventh B test")
     REQUIRE(new_lex()==-1); //and an EOF
-    
+
     remove("./lexer_table_test");//delete our lexer file.
 }

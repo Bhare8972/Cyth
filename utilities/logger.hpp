@@ -35,27 +35,25 @@ class logger
 private:
     std::list<std::string> data;
     friend std::ostream& operator<<(std::ostream& os, const logger& dt);
-    
+
 public:
     logger(){}
-    
-    template<typename T>
-    void operator()(T input)
+
+    void operator()()
     {
-        std::stringstream tmp;
-        tmp<<input<<std::endl;
-        data.push_back(tmp.str());
+        data.push_back("\n");
     }
-    //adds each bit of data to our log
-    
+
     template<typename T, typename... Ts>
     void operator()(T input, Ts... inputs)
     {
-        (*this)(input);
+        std::stringstream tmp;
+        tmp<<input;
+        data.push_back(tmp.str());
         (*this)(inputs...);
     }
     //adds each bit of data to our log
-    
+
     void write(std::string fname);
     //write the data to a file
 };

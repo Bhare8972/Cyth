@@ -681,7 +681,7 @@ shared_ptr<regex_node> csu::parse_single_node(const utf8_string& regex, uint& po
         }
         if(not (regex[position]=="\""))
         {
-            throw gen_exception("REGEX ERROR: literal is not ended bya '\"'");
+            throw gen_exception("REGEX ERROR: literal is not ended by a '\"'");
         }
         position+=1;
     }
@@ -751,7 +751,7 @@ shared_ptr<regex_node> csu::parse_single_node(const utf8_string& regex, uint& po
     }
     else
     {
-        throw gen_exception("REGEX EROR: unrecognized charector in regex");
+        throw gen_exception("REGEX ERROR: unrecognized charector in regex:", regex[position]);
     }
 
     count_whitespace(regex, position);

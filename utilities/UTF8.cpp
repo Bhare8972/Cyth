@@ -40,7 +40,7 @@ code_point::code_point( const code_point& rhs)
         code_units=0;
         return;
     }
-    
+
     int l=rhs.NUnits();
     code_units=new uint8_t[l];
     for(int x=0; x<l; x++)
@@ -108,11 +108,11 @@ code_point::code_point(std::istream& input_stream)
         //leave codepoint empty, hope someone catches it
         return;
     }
-    
+
     int NUNITS=NUnits(first_char);
     code_units=new uint8_t[NUNITS];
     code_units[0]=first_char;
-    
+
     int a=1;
     switch(NUNITS)
     {
@@ -191,7 +191,7 @@ code_point& code_point::operator=(const code_point& other)
             code_units=0;
             return *this;
         }
-        
+
         if (NUnits() != l)/* storage cannot be reused (e.g. different sizes) */
         {
             if(code_units)
@@ -302,7 +302,7 @@ uint32_t code_point::to_UTF32() const
     {
         throw gen_exception("cannot get UTF 8 value of empty code point");
     }
-    
+
     uint8_t* source=code_units;
     //all cases fall through, on purpose.
     switch(N_units)
@@ -463,6 +463,15 @@ utf8_string::utf8_string(const char* input)
     capacity=0;
     points=0;
     from_cpp_string(str_in);
+}
+
+utf8_string::utf8_string(code_point& input)
+{
+    length=1;
+    capacity=1;
+    points=new code_point[1];
+
+    points[0]=input;
 }
 
 utf8_string::~utf8_string()
@@ -751,3 +760,18 @@ utf8_string csu::operator+(const utf8_string& LHS, const utf8_string& RHS)
     ret.append(RHS);
     return ret;
 }
+
+bool csu::operator< (const utf8_string& lhs, const utf8_string& rhs)
+{
+    if(lhs.length<rhs.length) return true;
+    if(lhs.length>rhs.length) return false;
+
+    for( int i=0; i<lhs.length; i++ )
+    {
+        if( lhs.points[i]<rhs.points[i] ) return true;
+        if( lhs.points[i]>rhs.points[i] ) return false;
+    }
+
+    return true;
+}
+

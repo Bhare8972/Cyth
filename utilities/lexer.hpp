@@ -22,10 +22,11 @@ this file is a set of utilities and a lexer, designed for lexing text files in U
 #include "UTF8.hpp"
 #include "gen_ex.h"
 #include "regex.hpp"
-#include "logger.hpp"
+#include "serialize.hpp"
 
 #include <iostream>
 #include <fstream>
+#include <sstream>
 #include <functional>
 #include <initializer_list>
 #include <memory>
@@ -149,7 +150,7 @@ public:
     {
         add_msg(_msgs...);
     }
-    
+
     lexer_exception(const lexer_exception& to_copy) : msg(to_copy.msg.str() )
     //copy constructor
     {
@@ -210,6 +211,19 @@ public:
         std::stringstream tmp;
         input_buffer=std::shared_ptr<ring_buffer>(new ring_buffer(tmp));
     }
+
+    lexer( const lexer<return_type>& RHS)
+    {
+        continue_lexing_b=false;
+        lexer_state=0;
+        EOF_action=RHS.EOF_action;
+        state_table=RHS.state_table;
+        actions=RHS.actions;
+        lexer_states=RHS.lexer_states;
+        std::stringstream tmp;
+        input_buffer=std::shared_ptr<ring_buffer>(new ring_buffer(tmp));
+    }
+
 
     void print_machine()
     {
@@ -289,7 +303,7 @@ public:
                     DFA_state=(*state_table)[DFA_state_index+initial_DFA_index];
                 }
             }
-            
+
             if(input_buffer->has_read_EOF and DFA_state->accepting_info != -1)
             //there may be an unaccepted state if the next char is EOF
             {
@@ -337,7 +351,6 @@ public:
                 throw lexer_exception("Could not read token(", data, ") at ", span);
             }
         }
-
     }
 };
 
@@ -353,28 +366,15 @@ public:
     }
 };
 
-template<typename T>
-void binary_write(std::ostream& output, T to_write)
-//write a bit of numerical data to a file.
-{
-    output.write((char*)&to_write,sizeof(to_write));
-}
-
-template<typename T>
-void binary_read(std::istream& input, T& to_read)
-//read a bit of numerical data from a file. 
-//type must match when it was written, or will be inconsisitant
-{
-    input.read((char*)&to_read,sizeof(to_read));
-}
-
 template<typename return_type >
 class lexer_generator
 //a class that will create a lexer for us.
 {
-private:
+public:
 
     typedef std::function<return_type (utf8_string&, location_span&, lexer<return_type>*)>  lex_func_t;
+private:
+
 
     struct pattern
     {
@@ -398,6 +398,7 @@ private:
     lex_func_t EOF_action;
 
 public:
+
 
     lexer_generator(utf8_string _state_table_file_name)
     {
@@ -472,18 +473,18 @@ public:
 
         return lexer<return_type>(EOF_action, state_table, actions, lexer_states);
     }
-    
+
     void load_from_file()
     //read the state table from a file
     {
         std::ifstream fin(state_table_file_name.to_cpp_string());
         if(not fin) return;
-        
+
         //reset the generator.
         state_table.reset();
         lexer_states.reset();
         made_table=false;
-        
+
         //get state_table
         unsigned int num_states=0;
         binary_read(fin, num_states);
@@ -505,7 +506,7 @@ public:
             }
             state_table->push_back(NDFS);
         }
-        
+
         //get lexer_states
         unsigned int N_lexer_states=0;
         binary_read(fin, N_lexer_states);
@@ -519,12 +520,12 @@ public:
         }
         made_table=true;
     }
-    
+
     void load_to_file()
     //serialize the state_table to a file
     {
         if(not made_table) return;
-        
+
         std::ofstream fout(state_table_file_name.to_cpp_string(), std::ios_base::binary);
         //first we output state_table
         uint num_states=state_table->size();
@@ -561,13 +562,14 @@ private:
 
         unsigned int lexer_state=0;
         auto pattern_iter=patterns.begin();
+        auto pattern_end=patterns.end();
         while(lexer_state<=current_state) //loop over each potential state
         {
             std::list< std::shared_ptr<NFA_state> > NFA_of_lexerstate;
             std::shared_ptr<NFA_state> first_state(new NFA_state);
             NFA_of_lexerstate.push_back(first_state);
 
-            for(  ; pattern_iter->state==lexer_state; ++pattern_iter) //loop over each patern that is in the present lexer_state
+            for(  ; pattern_iter!= pattern_end and pattern_iter->state==lexer_state; ++pattern_iter) //loop over each patern that is in the present lexer_state
             {
                 unsigned int chars_counted=0;
                 auto regex_tree=parse_regex(pattern_iter->regular_expression, chars_counted);
@@ -575,7 +577,7 @@ private:
                     throw gen_exception("full regex cannot be parsed");
                 if( not regex_tree)
                     throw gen_exception("could not parse regex");
-                
+
 
                 //get new states, make end state as accepting
                 std::list< std::shared_ptr<NFA_state> > new_states=regex_tree->get_NFA();
@@ -589,7 +591,6 @@ private:
 
             std::list< std::shared_ptr<DFA_state> > DFA_states=NFA_to_DFA(NFA_of_lexerstate);
             DFA_states=DFA_minimization(DFA_states);
-
 
             current_lexer_states.push_back(current_state_table.size());
             current_state_table.insert(current_state_table.end(), DFA_states.begin(), DFA_states.end() );

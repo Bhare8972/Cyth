@@ -100,3 +100,40 @@ TEST_CASE( "test type_erasure dyn_method", "[dyn_method][dyn_holder]" )
     REQUIRE( *ret_data2.cast<double>() == Approx(16.0) );
     REQUIRE_NOTHROW( two_args(6,10.0) );
 }
+
+//a special test class to test the dyn_func
+class dyn_func_tester
+{
+    int my_val;
+public:
+    dyn_func_tester(int _val)
+    {
+        my_val=_val;
+    }
+
+    int operator()(int a, int b)
+    {
+        return a+b-my_val;
+    }
+};
+
+int func_tester_func(double a)
+{
+    return int(a+3);
+}
+
+TEST_CASE( "test type_erasure dyn_func", "[dyn_func][dyn_holder]" ) 
+{
+    dyn_func tster(func_tester_func);
+    auto ret_data=tster(3.0);
+    REQUIRE(*ret_data.cast<int>()==6);
+    
+    dyn_func_tester TST_CLS(3);
+    dyn_func tster2( TST_CLS, &dyn_func_tester::operator());
+    ret_data=tster2(5,3);
+    REQUIRE(*ret_data.cast<int>()==5);
+    REQUIRE_THROWS_AS( tster(), wrong_num_args );
+    
+    dyn_func tster3( [](int a)->float{return a+1;} );
+}
+
