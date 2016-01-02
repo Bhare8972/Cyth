@@ -22,6 +22,7 @@ this file is a set of utilities and a lexer, designed for lexing text files in U
 #include "UTF8.hpp"
 #include "gen_ex.h"
 #include "regex.hpp"
+#include "serialize.hpp"
 
 #include <iostream>
 #include <fstream>
@@ -364,21 +365,6 @@ public:
         return return_type();
     }
 };
-
-template<typename T>
-void binary_write(std::ostream& output, T to_write)
-//write a bit of numerical data to a file.
-{
-    output.write((char*)&to_write,sizeof(to_write));
-}
-
-template<typename T>
-void binary_read(std::istream& input, T& to_read)
-//read a bit of numerical data from a file.
-//type must match when it was written, or will be inconsisitant
-{
-    input.read((char*)&to_read,sizeof(to_read));
-}
 
 template<typename return_type >
 class lexer_generator

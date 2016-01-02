@@ -19,6 +19,7 @@ this file is a LALR1 parser,parser_generator, and associated utilities
 #include <algorithm>
 #include "parser.hpp"
 #include "logger.hpp"
+#include "serialize.hpp"
 
 using namespace csu;
 using namespace std;
@@ -549,6 +550,48 @@ ostream& csu::operator<<(ostream& os, const parser_action& dt)
     return os;
 }
 
+void parser_action::binary_write(std::ostream& output)
+{
+    unsigned int action_num=0;
+    switch( action_todo )
+    {
+        case ERROR: action_num=1;
+        break;
+        case SHIFT: action_num=2;
+        break;
+        case ACCEPT: action_num=3;
+        break;
+        case REDUCE: action_num=4;
+        break;
+        case NONE: action_num=5;
+        break;
+    }
+    ::binary_write(output, action_num);
+    ::binary_write(output, data);
+}
+
+
+void parser_action::binary_read(std::istream& input)
+{
+    unsigned int action_num=0;
+    ::binary_read(input, action_num);
+    ::binary_read(input, data);
+
+    switch(action_num)
+    {
+        case 1: action_todo=ERROR;
+        break;
+        case 2: action_todo=SHIFT;
+        break;
+        case 3: action_todo=ACCEPT;
+        break;
+        case 4: action_todo=REDUCE;
+        break;
+        case 5: action_todo=NONE;
+        break;
+    }
+}
+
 //end parser_action
 
 //start parser_state class
@@ -594,20 +637,18 @@ parser_action parser_state::get_action(unsigned int non_term)
 //parser_generator
 parser_generator::parser_generator(utf8_string _parser_table_file_name, utf8_string _lexer_table_file_name)
 {
-    next_token_num=1;
-
     parser_table_file_name=_parser_table_file_name;
     parser_table_generated=false;
 
     lex_gen=std::shared_ptr<lexer_generator<token_data> >(new lexer_generator<token_data> (_lexer_table_file_name) );
 
+    ERROR_terminal=terminal_ptr(new terminal("ERROR", error_token_id, lex_gen.get()));
+    next_token_num=error_token_id+1;
+    terminals["ERROR"]=ERROR_terminal;
+
     EOF_terminal=terminal_ptr(new terminal("EOF", next_token_num, lex_gen.get()));
     next_token_num++;
     terminals["EOF"]=EOF_terminal;
-
-    EPSILON_terminal=terminal_ptr(new terminal("EPSILON", next_token_num, lex_gen.get()));
-    next_token_num++;
-    terminals["EPSILON"]=EPSILON_terminal;
 
     lex_gen->set_EOF_action(lexer_function_generic(EOF_terminal->token_ID, true));
 }
@@ -617,9 +658,9 @@ terminal_ptr parser_generator::get_EOF_terminal()
     return EOF_terminal;
 }
 
-terminal_ptr parser_generator::get_EPSILON_terminal()
+terminal_ptr parser_generator::get_ERROR_terminal()
 {
-    return EPSILON_terminal;
+    return ERROR_terminal;
 }
 
 std::shared_ptr<lexer_generator<token_data> > parser_generator::get_lexer_generator()
@@ -694,13 +735,28 @@ void parser_generator::print_grammer()
     }
 }
 
+void parser_generator::reset_table()
+{
+    parser_table_generated=false;
+    term_map.reset();
+    production_information.reset();
+    state_table.reset();
+}
+
 shared_ptr<parser> parser_generator::get_parser(bool do_file_IO)
 {
     if(not parser_table_generated)
     {
-        //check for file
+        if(do_file_IO)
+        {
+            load_from_file();
+        }
 
-        generate_parser_table();
+        if( not parser_table_generated)
+        {
+            generate_parser_table();
+            if(do_file_IO) load_to_file();
+        }
     }
 
     lexer<token_data> new_lex=lex_gen->get_lexer(do_file_IO);
@@ -727,6 +783,109 @@ void parser_generator::resolve_unknown_terminal(token_ptr _new_terminal) //this 
     {
         //it is a known terminal
         _new_terminal->token_ID=(*term_iter).second->token_ID;
+    }
+}
+
+void parser_generator::load_from_file()
+{
+    //check if file exists
+    std::ifstream fin(parser_table_file_name.to_cpp_string(), std::ios_base::binary);
+    if( not fin) return;
+
+    //make term map
+    term_map= shared_ptr< map<unsigned int, utf8_string> >( new map<unsigned int, utf8_string>());
+    for(auto& name_term_pair : terminals)
+    {
+        (*term_map)[name_term_pair.second->token_ID]=name_term_pair.first;
+    }
+
+    //count number of productions
+    unsigned int num_productions=0;
+    for(auto& name_nonterm_pair : non_terminals)
+    {
+        num_productions+=name_nonterm_pair.second->productions.size();
+    }
+
+    //make production information
+    production_information=shared_ptr< vector<production_info_ptr> >( new vector<production_info_ptr>() );
+    production_information->resize(num_productions);
+    for(auto name_nonterm_pair : non_terminals)
+    {
+        for(auto prod : name_nonterm_pair.second->productions)
+        {
+            (*production_information)[prod->id]=prod->get_info();
+        }
+    }
+
+    //read state_table
+    unsigned int num_states=0;
+    binary_read(fin, num_states);
+
+    state_table=shared_ptr< vector<parser_state> >( new vector<parser_state>() );
+    state_table->resize(num_states);
+    for(unsigned int state_i=0; state_i<num_states; state_i++)
+    {
+        auto& current_state=(*state_table)[state_i];
+
+        //read GOTO table
+        unsigned int goto_size=0;
+        binary_read(fin, goto_size);
+        for(unsigned int goto_i=0; goto_i<goto_size; goto_i++)
+        {
+            unsigned int first=0;
+            unsigned int second=0;
+            binary_read(fin, first);
+            binary_read(fin, second);
+            current_state.GOTO[first]=second;
+        }
+
+        //read action_table
+        unsigned int action_size=0;
+        binary_read(fin, action_size);
+        for(unsigned int action_i=0; action_i<action_size; action_i++)
+        {
+            unsigned int state=0;
+            binary_read(fin, state);
+            current_state.ACTION[state].binary_read(fin);
+        }
+
+        //read default action
+        current_state.default_action.binary_read(fin);
+    }
+    parser_table_generated=true;
+}
+
+void parser_generator::load_to_file()
+{
+    if(not parser_table_generated) return;
+    std::ofstream fout(parser_table_file_name.to_cpp_string(), std::ios_base::binary);
+
+    //save state_table to the file
+    unsigned int num_states=state_table->size();
+    binary_write(fout, num_states);
+    for(parser_state& state : *state_table)
+    {
+        //save the GOTO table
+        unsigned int goto_size=state.GOTO.size();
+        binary_write(fout, goto_size);
+        for(auto& state_pair : state.GOTO)
+        {
+            unsigned int first=state_pair.first;
+            unsigned int second=state_pair.second;
+            binary_write(fout, first);
+            binary_write(fout, second);
+        }
+        //save the action table
+        unsigned int action_size=state.ACTION.size();
+        binary_write(fout, action_size);
+        for(auto& stateaction_pair : state.ACTION)
+        {
+            unsigned int first=stateaction_pair.first;
+            binary_write(fout, first);
+            stateaction_pair.second.binary_write(fout);
+        }
+        //save teh default action
+        state.default_action.binary_write(fout);
     }
 }
 
@@ -780,12 +939,7 @@ list<token_ptr> parser_generator::first_single(token_ptr _token, list<unsigned i
 {
     list<token_ptr> ret;
 
-    if(_token->token_ID==EPSILON_terminal->token_ID)
-    {
-        output_contains_epsilon=true;
-        return ret;
-    }
-    else if(_token->is_terminal)
+    if(_token->is_terminal)
     {
         output_contains_epsilon=false;
         ret.push_back(_token);
@@ -1356,12 +1510,14 @@ void parser_generator::generate_parser_table()
 
 
 //begin parser class
+
 parser::parser(lexer<token_data>& _lex, shared_ptr< map<unsigned int, utf8_string> > _term_map,
        shared_ptr< vector<production_info_ptr> > _production_information, shared_ptr< vector<parser_state> > _state_table) : lex(_lex)
 {
    term_map=_term_map;
    production_information=_production_information;
    state_table=_state_table;
+   error_recovery=0;
 }
 
 shared_ptr<parser> parser::copy()
@@ -1374,13 +1530,21 @@ dyn_holder parser::parse(bool reporting)
     stack.clear();
     stack.push_back( token_data(0, dyn_holder(), location_span() ) ); //push state 0
     next_terminal=lex();
+    error_recovery=0;
 
     int state=0;
+    bool had_error=false;
+    //0 is currently parsing. 1 means succsesfull exit. 2 means unsuccsesfull error recovery. 3 means succsesfull error recovery
     while(state==0)
     {
         state=parse_step(reporting);
+        if(state==3)
+        {
+            had_error=true;
+            state=0;
+        }
     }
-    if(state==1)
+    if(state==1 and not had_error)
     {
         return get_data();
     }
@@ -1407,6 +1571,23 @@ int parser::parse_step(bool reporting)
 
     if( action.is_error() )
     {
+        if(error_recovery != 0)//we are still in error recovery anyway.
+        {
+            auto state_iter=stack.begin();
+            for( unsigned int i=0; i<error_recovery; i++) state_iter++;
+            state_iter++; //one more to keep the error token
+            stack.erase(state_iter, stack.end()); //throw away the states
+            if(next_terminal.get_ID() == eof_token_id )
+            {
+                return 2; //keep from infinite loop
+            }
+            else
+            {
+                next_terminal=lex();//throw away affending terminal
+                return 3;
+            }
+        }
+
         cout<<"parsing error- expected one of: ";
         for(auto& ID_action_pair : state.ACTION)
         {
@@ -1420,8 +1601,34 @@ int parser::parse_step(bool reporting)
             state_string(cout);
         }
 
-        //do not try to recover from error, yet
-        return 2;
+        //// COMENCE ERROR RECOVERY
+
+        //first find a state that allows for shifting an ERROR token
+        auto stack_loc = stack.rbegin();
+        bool found_state=false;
+        error_recovery=stack.size();
+        for (auto end=stack.rend(); stack_loc != end; ++stack_loc )
+        {
+            error_recovery--;
+            parser_state& state=(*state_table)[ stack_loc->get_ID() ];
+            if( state.get_action( error_token_id ).is_shift() )
+            {
+                found_state=true;
+                break;//found an acceptable state
+            }
+        }
+        if( not found_state) return 2;//if we have not found an error-recovery state. Return!
+
+        //pop states off the stack
+        stack.erase(stack_loc.base(), stack.end());
+        //push the error token
+        parser_state& curr_state=(*state_table)[ stack_loc->get_ID() ];
+        unsigned int new_state_id=curr_state.get_action( error_token_id ).get_data();
+        token_data new_state(new_state_id, next_terminal.data(), next_terminal.loc() );
+        stack.push_back(new_state);
+        next_terminal=lex();
+
+        return 3;
     }
 
     else if( action.is_reduce())
@@ -1437,11 +1644,6 @@ int parser::parse_step(bool reporting)
         ////pop the states off of the stack
         auto datum=pop_end_elements(stack, prod_info->num_tokens);
 
-        if(datum.size()==0)//this should never be called. NOt going to worry about it
-        {
-            cout<<"problem in parser, needs to be fixed"<<endl;
-        }
-
         ////run user action
         parser_function_class::data_T arguments(datum);
         dyn_holder new_data = prod_info->action->call(arguments);
@@ -1453,6 +1655,9 @@ int parser::parse_step(bool reporting)
         unsigned int new_state_id = (*state_table)[stack.back().get_ID()].get_goto( prod_info->L_val_ID );
         token_data new_state(new_state_id, new_data, new_data_span);
         stack.push_back(new_state);
+
+        ////exit error_recovery
+        if( error_recovery!=0) error_recovery=0;
 
         if(reporting)
         {

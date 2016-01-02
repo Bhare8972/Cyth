@@ -33,10 +33,7 @@ Much of this is based off of the dragon book.
 #include "iter_wrap.hpp"
 
 //TODO:
-//  add saving the tables into a file
-//  add error handeling
 //  add multiple starting non-terms
-//  remove epsilon terminal
 
 //Algorithm improvements:
 // in class item: replace get_PostTokens with two functions, one gives number of posttokens, and ond returns individual post-tokens based on index
@@ -406,6 +403,10 @@ public:
     unsigned int get_data() const;
 
     bool operator==(parser_action& RHS);
+
+    //for reading and writing the data to and from a file
+    void binary_write(std::ostream& output);
+    void binary_read(std::istream& input);
 };
 
 class parser_state
@@ -425,12 +426,14 @@ public:
     parser_action get_action(unsigned int non_term);
 };
 
+const unsigned int error_token_id=1;
+const unsigned int eof_token_id=error_token_id+1;
 class parser_generator
 {
 private:
     utf8_string parser_table_file_name;
     terminal_ptr EOF_terminal;
-    terminal_ptr EPSILON_terminal;
+    terminal_ptr ERROR_terminal;
 
     std::map<utf8_string, terminal_ptr> terminals;
     std::map<utf8_string, non_terminal_ptr> non_terminals;
@@ -451,7 +454,7 @@ public:
 
     //functions to define the languege
     terminal_ptr get_EOF_terminal();
-    terminal_ptr get_EPSILON_terminal();
+    terminal_ptr get_ERROR_terminal();
     std::shared_ptr<lexer_generator<token_data> > get_lexer_generator();
 
     //these two will throw a general exception if there is any token of the same name
@@ -459,8 +462,8 @@ public:
     non_terminal_ptr new_nonterminal(utf8_string name);
 
     void set_start_nonterm(non_terminal_ptr _start_nonterm);
-    //void set_precedence(std::initializer_list<non_terminal_ptr> operators);
     void print_grammer();
+    void reset_table(); //resets the parser_table so that it will need to be regenerated.
 
     std::shared_ptr<parser> get_parser(bool do_file_IO=true);
 
@@ -497,11 +500,13 @@ private:
 
     std::list< token_data > stack;
     token_data next_terminal;
+    unsigned int error_recovery; //is zero if not in error recovery
 
     void state_string(std::ostream& os);
     int parse_step(bool reporting=false);
 
 public:
+
     parser(lexer<token_data>& _lex, std::shared_ptr< std::map<unsigned int, utf8_string> > _term_map,
            std::shared_ptr< std::vector<production_info_ptr> > _production_information, std::shared_ptr< std::vector<parser_state> > _state_table);
 
