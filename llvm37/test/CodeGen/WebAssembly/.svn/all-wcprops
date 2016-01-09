@@ -1,0 +1,11 @@
+K 25
+svn:wc:ra_dav:version-url
+V 69
+/svn/llvm-project/!svn/ver/241520/llvm/trunk/test/CodeGen/WebAssembly
+END
+lit.local.cfg
+K 25
+svn:wc:ra_dav:version-url
+V 83
+/svn/llvm-project/!svn/ver/241520/llvm/trunk/test/CodeGen/WebAssembly/lit.local.cfg
+END

@@ -1,0 +1,43 @@
+10
+
+dir
+241934
+http://llvm.org/svn/llvm-project/llvm/trunk/test/Transforms/SLPVectorizer
+http://llvm.org/svn/llvm-project
+
+
+
+2015-07-08T23:40:55.026941Z
+241760
+spatel
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+91177308-0d34-0410-b5e6-96231b3b80d8
+
+ARM
+dir
+
+XCore
+dir
+
+X86
+dir
+
+AArch64
+dir
+
+AMDGPU
+dir
+
