@@ -1,274 +1,0 @@
-10
-
-dir
-241934
-http://llvm.org/svn/llvm-project/llvm/trunk/test/Transforms
-http://llvm.org/svn/llvm-project
-
-
-
-2015-07-10T14:02:02.833162Z
-241911
-d0k
-has-props
-
-
-
-
-
-
-
-
-
-
-
-
-
-91177308-0d34-0410-b5e6-96231b3b80d8
-
-PruneEH
-dir
-
-EarlyCSE
-dir
-
-LoopDistribute
-dir
-
-SpeculativeExecution
-dir
-
-AlignmentFromAssumptions
-dir
-
-StripSymbols
-dir
-
-MergeFunc
-dir
-
-GlobalDCE
-dir
-
-SimplifyCFG
-dir
-
-LoadCombine
-dir
-
-AtomicExpand
-dir
-
-LICM
-dir
-
-ConstProp
-dir
-
-ScalarRepl
-dir
-
-LoopIdiom
-dir
-
-NaryReassociate
-dir
-
-ADCE
-dir
-
-TailCallElim
-dir
-
-LoopDeletion
-dir
-
-IndVarSimplify
-dir
-
-AtomicExpandLoadLinked
-dir
-
-LoopVectorize
-dir
-
-SafeStack
-dir
-
-LoopUnroll
-dir
-
-MemCpyOpt
-dir
-
-LoopStrengthReduce
-dir
-
-PlaceSafepoints
-dir
-
-IRCE
-dir
-
-CodeGenPrepare
-dir
-
-Internalize
-dir
-
-SCCP
-dir
-
-LoopReroll
-dir
-
-PhaseOrdering
-dir
-
-Reg2Mem
-dir
-
-Mem2Reg
-dir
-
-DeadArgElim
-dir
-
-Scalarizer
-dir
-
-BranchFolding
-dir
-
-FunctionAttrs
-dir
-
-DeadStoreElimination
-dir
-
-StraightLineStrengthReduce
-dir
-
-LowerInvoke
-dir
-
-LCSSA
-dir
-
-CodeExtractor
-dir
-
-GCOVProfiling
-dir
-
-InstCombine
-dir
-
-Inline
-dir
-
-GlobalOpt
-dir
-
-LowerExpectIntrinsic
-dir
-
-LowerAtomic
-dir
-
-LoopSimplify
-dir
-
-ArgumentPromotion
-dir
-
-InstMerge
-dir
-
-ConstantHoisting
-dir
-
-LoopUnswitch
-dir
-
-ObjCARC
-dir
-
-AddDiscriminators
-dir
-
-PartiallyInlineLibCalls
-dir
-
-ConstantMerge
-dir
-
-LowerSwitch
-dir
-
-SLPVectorizer
-dir
-
-Util
-dir
-
-BBVectorize
-dir
-
-LoopInterchange
-dir
-
-StructurizeCFG
-dir
-
-IPConstantProp
-dir
-
-CorrelatedValuePropagation
-dir
-
-LowerBitSets
-dir
-
-LoopRotate
-dir
-
-InstSimplify
-dir
-
-GVN
-dir
-
-BDCE
-dir
-
-MetaRenamer
-dir
-
-RewriteStatepointsForGC
-dir
-
-JumpThreading
-dir
-
-Reassociate
-dir
-
-TailDup
-dir
-
-Float2Int
-dir
-
-SampleProfile
-dir
-
-SeparateConstOffsetFromGEP
-dir
-
-Sink
-dir
-
-SROA
-dir
-

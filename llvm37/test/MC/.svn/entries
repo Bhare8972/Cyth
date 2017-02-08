@@ -1,73 +1,0 @@
-10
-
-dir
-241934
-http://llvm.org/svn/llvm-project/llvm/trunk/test/MC
-http://llvm.org/svn/llvm-project
-
-
-
-2015-07-09T18:11:40.096824Z
-241830
-majnemer
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-91177308-0d34-0410-b5e6-96231b3b80d8
-
-MachO
-dir
-
-AArch64
-dir
-
-Hexagon
-dir
-
-AsmParser
-dir
-
-Markup
-dir
-
-ELF
-dir
-
-Sparc
-dir
-
-Mips
-dir
-
-Disassembler
-dir
-
-COFF
-dir
-
-AMDGPU
-dir
-
-SystemZ
-dir
-
-PowerPC
-dir
-
-ARM
-dir
-
-X86
-dir
-
