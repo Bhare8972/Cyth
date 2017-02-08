@@ -1,6 +1,0 @@
-1) How to solve ODE equations of motion?  (am using 4th order kunge-kutta)
-2) Do I need to concern myself with langiven equations?
-3) is looking up values in a table really faster than calculation? (especially for beth friction)
-4) Does elastic scattering with shielded potential change particles' energy? (I think not)
-5) How to generate an elastic scattering distribution? (bin width?)
-6) How to produce usefull tables for other distributions?  (perhaps cumtrapz?)
