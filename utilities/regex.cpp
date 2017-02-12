@@ -140,7 +140,7 @@ void NFA_state::print()
 }
 
 //NFA automation
-NFA_automation::NFA_automation(std::list< std::shared_ptr<NFA_state> >&  _states)
+NFA_automation::NFA_automation( std::list< std::shared_ptr<NFA_state> >&  _states)
 {
     num_states=_states.size();
     states.reserve( num_states );
@@ -865,8 +865,13 @@ NFA_automation csu::compile_regex_NFA(std::list<utf8_string> patterns)
 
 //helper functions for producing a DFA
 
-list< shared_ptr<DFA_state> > csu::NFA_to_DFA(const list< shared_ptr<NFA_state> >& NFA_states)
+list< shared_ptr<DFA_state> > csu::NFA_to_DFA( list< shared_ptr<NFA_state> >& NFA_states)
 {
+    //NFA_automation ARG(NFA_states);
+    //ARG.print_states();
+
+
+
     typedef shared_ptr<list<unsigned int>> NFA_IN_DFA_TYPE;
 
     //epsilon closure on some DFA state. No return
@@ -918,19 +923,24 @@ list< shared_ptr<DFA_state> > csu::NFA_to_DFA(const list< shared_ptr<NFA_state> 
         list< NFA_transition > DFA_transitions;
         for(unsigned int NFA_ste : *dfa_of_nfa_state)
         {
-            for(auto NFA_tran_ : (*next(NFA_states.begin(),NFA_ste))->transitions )
+            auto NFA_transitions=(*next(NFA_states.begin(),NFA_ste))->transitions;
+            for(auto NFA_tran : NFA_transitions )
             {
-                if(NFA_tran_.start==NFA_state::epsilon)
+I AM HERE
+THERE IS SOMETHING WRONG HERE. IF AN NFA_tran SPLITS, WHAT HAPPENS TO THE EXTRA BITS? HOW DO THEY GET CHECKED FOR OVERLAP?
+                if(NFA_tran.start==NFA_state::epsilon)
                 {
                     continue; //ignore epsilon transitions.
                 }
 
-                NFA_transition NFA_tran(NFA_tran_.start,NFA_tran_.stop, NFA_tran_.new_states) ; //copy the NFA transition, as it will be modified
                 //now we compare NFA_tran to each of the transitions in the DFA
-                list< NFA_transition > new_DFA_transitions;
+                list< NFA_transition > new_DFA_transitions; //these are new transitions that we are sure don't have overlap. IE: they were already part of a previous DFA transition
                 bool add_NFA_tran=true;
+
+                cout<<"NEW NFA from: "<< NFA_tran.start<< " to "<< NFA_tran.stop<<endl;
                 for(auto& DFA_tran : DFA_transitions) //we are trying to add NFA_tran into DFA_transitions, but we need to remove all overlap
                 {
+                    cout<<"  OLD DFA from: "<< DFA_tran.start<< " to "<< DFA_tran.stop<<endl;
 
                     if(DFA_tran.is_lesser(NFA_tran.stop) or DFA_tran.is_greater(NFA_tran.start))//new transition is out of range of old transition
                     {
@@ -1032,14 +1042,18 @@ list< shared_ptr<DFA_state> > csu::NFA_to_DFA(const list< shared_ptr<NFA_state> 
                     }
                     else if(NFA_tran.in_span(DFA_tran.stop) and NFA_tran.in_span(DFA_tran.start)) //old transition is in new transition
                     {
+                        cout<<"FOUND DFA IN NFA"<<endl;
                         //append NFA_tran states to DFA_tran
                         DFA_tran.new_states.insert(DFA_tran.new_states.end(), NFA_tran.new_states.begin(),  NFA_tran.new_states.end());
                         auto DFA_start=DFA_tran.start.to_UTF32();
                         auto DFA_end=DFA_tran.stop.to_UTF32();
 
                         //new_transition
-                        NFA_transition new_tran(code_point(DFA_end+1), NFA_tran.stop, NFA_tran.new_states); //new transition, with DFA states
-                        new_DFA_transitions.push_back(new_tran);
+                        NFA_transition new_tran_end(code_point(DFA_end+1), NFA_tran.stop, NFA_tran.new_states); //new transition, with DFA states
+                        new_DFA_transitions.push_back(new_tran_end);
+
+                        NFA_transition new_tran_begin(NFA_tran.start, code_point(DFA_start-1), NFA_tran.new_states); //new transition, with DFA states
+                        new_DFA_transitions.push_back(new_tran_begin);
 
                         //modify NFA_tran
                         NFA_tran.stop=code_point(DFA_start-1);
@@ -1074,6 +1088,23 @@ list< shared_ptr<DFA_state> > csu::NFA_to_DFA(const list< shared_ptr<NFA_state> 
                     accepting_info=NFA_ste->accepting_info;
                 }
             }
+        }
+
+
+        cout<<"A DFA STATE"<<endl;
+        cout<<"  accepting:"<<accepting_info<<endl;
+        for(NFA_transition& tran : DFA_transitions)
+        {
+            if(tran.start==NFA_state::epsilon)
+                cout<<"  on epsilon";
+            else
+                cout<<"  from "<<tran.start<<" to "<<tran.stop;
+            cout<<" transition to: ";
+            for(uint ste : tran.new_states)
+            {
+                cout<<ste<<" ";
+            }
+            cout<<endl;
         }
 
         shared_ptr<DFA_state> new_DFA_state(new DFA_state(accepting_info));

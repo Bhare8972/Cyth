@@ -95,6 +95,7 @@ public:
 
 ///// functionals /////
 
+//parser
 class parser_function_class
 //a class that will encapsulate all actions that the parser takes
 {
@@ -115,6 +116,27 @@ public:
     virtual dyn_holder call(data_T& data) { return dyn_holder( func(data) ); }
 };
 
+class parser_return_action : public parser_function_class
+//a simple action for the parser to just return the data assocated with the ith token
+{
+private:
+    int ith_token;
+
+public:
+    parser_return_action(int i)
+    {
+        ith_token=i;
+    }
+
+    virtual dyn_holder call(data_T& data)
+    {
+        return data[ith_token].data();
+    }
+};
+
+
+
+//lexer
 class lexer_function_generic //: public lexer_function_class
 {
     bool return_data;
@@ -124,6 +146,7 @@ public:
 
     token_data operator()( utf8_string& data, location_span& loc, lexer<token_data>* lex);
 };
+
 
 template<typename ret_type>
 class lexer_functional//: public lexer_function_class
@@ -261,6 +284,9 @@ public:
         action=new_parser_func;
         return *this;
     }
+
+    production& set_return_action(int i);
+    /// set the action to just return the data associated with the i'th token
 
     production& set_associativity(association _assoc);
     production& set_associativity(utf8_string _assoc); //will convert a utf8_string into one of the three associations

@@ -1,520 +1,205 @@
 cmake_minimum_required(VERSION 3.3)
 
-project("Cyth")
+project("cyth")
 
-##set utilities
+##make LLVM???? (does this build Clang?)
+add_subdirectory(llvm37)
+
+#set(LLVM_LINK_COMPONENTS
+ # Core
+  #ExecutionEngine
+ # MC
+ # MCJIT
+  #Support
+ # native
+ # )
+
+##include utilities
 set(utils ./utilities)
 include_directories ("${utils}")
-file(GLOB utility_srcs . ${utils}/*.cpp)
 
-##set LLVM Headers
+##include LLVM headers
 set(llvm_include ./llvm37/include)
-set(llvm_source ./llvm37/lib)
 include_directories ("${llvm_include}")
-include_directories ("${llvm_source}/AsmParser")
-include_directories ("${llvm_source}/Bitcode/Writer")
-include_directories ("${llvm_source}/Bitcode/Writer")
-include_directories ("${llvm_source}/CodeGen")
-include_directories ("${llvm_source}/CodeGen/SelectionDAG")
-include_directories ("${llvm_source}/CodeGen/MIRParser")
-include_directories ("${llvm_source}/CodeGen/AsmPrinter")
-include_directories ("${llvm_source}/ExecutionEngine/RuntimeDyld")
-include_directories ("${llvm_source}/ExecutionEngine/RuntimeDyld/Targets")
-include_directories ("${llvm_source}/ExecutionEngine/IntelJITEvents")
-include_directories ("${llvm_source}/ExecutionEngine/MCJIT")
-include_directories ("${llvm_source}/ExecutionEngine/Interpreter")
-include_directories ("${llvm_source}/Fuzzer")
-include_directories ("${llvm_source}/IR")
-include_directories ("${llvm_source}/MC/MCDisassembler")
-include_directories ("${llvm_source}/TableGen")
 
-include_directories ("${llvm_source}/Target/AArch64")
-include_directories ("${llvm_source}/Target/AArch64/AsmParser")
-include_directories ("${llvm_source}/Target/AArch64/Disassembler")
-include_directories ("${llvm_source}/Target/AArch64/InstPrinter")
-include_directories ("${llvm_source}/Target/AArch64/MCTargetDesc")
-include_directories ("${llvm_source}/Target/AArch64/TargetInfo")
-include_directories ("${llvm_source}/Target/AArch64/Utils")
-
-include_directories ("${llvm_source}/Target/AMDGPU")
-include_directories ("${llvm_source}/Target/AMDGPU/AsmParser")
-include_directories ("${llvm_source}/Target/AMDGPU/Disassembler")
-include_directories ("${llvm_source}/Target/AMDGPU/InstPrinter")
-include_directories ("${llvm_source}/Target/AMDGPU/MCTargetDesc")
-include_directories ("${llvm_source}/Target/AMDGPU/TargetInfo")
-include_directories ("${llvm_source}/Target/AMDGPU/Utils")
-
-include_directories ("${llvm_source}/Target/ARM")
-include_directories ("${llvm_source}/Target/ARM/AsmParser")
-include_directories ("${llvm_source}/Target/ARM/Disassembler")
-include_directories ("${llvm_source}/Target/ARM/InstPrinter")
-include_directories ("${llvm_source}/Target/ARM/MCTargetDesc")
-include_directories ("${llvm_source}/Target/ARM/TargetInfo")
-include_directories ("${llvm_source}/Target/ARM/Utils")
-
-include_directories ("${llvm_source}/Target/BPF")
-include_directories ("${llvm_source}/Target/BPF/AsmParser")
-include_directories ("${llvm_source}/Target/BPF/Disassembler")
-include_directories ("${llvm_source}/Target/BPF/InstPrinter")
-include_directories ("${llvm_source}/Target/BPF/MCTargetDesc")
-include_directories ("${llvm_source}/Target/BPF/TargetInfo")
-include_directories ("${llvm_source}/Target/BPF/Utils")
-
-include_directories ("${llvm_source}/Target/CppBackend")
-include_directories ("${llvm_source}/Target/CppBackend/AsmParser")
-include_directories ("${llvm_source}/Target/CppBackend/Disassembler")
-include_directories ("${llvm_source}/Target/CppBackend/InstPrinter")
-include_directories ("${llvm_source}/Target/CppBackend/MCTargetDesc")
-include_directories ("${llvm_source}/Target/CppBackend/TargetInfo")
-include_directories ("${llvm_source}/Target/CppBackend/Utils")
-
-include_directories ("${llvm_source}/Target/Hexagon")
-include_directories ("${llvm_source}/Target/Hexagon/AsmParser")
-include_directories ("${llvm_source}/Target/Hexagon/Disassembler")
-include_directories ("${llvm_source}/Target/Hexagon/InstPrinter")
-include_directories ("${llvm_source}/Target/Hexagon/MCTargetDesc")
-include_directories ("${llvm_source}/Target/Hexagon/TargetInfo")
-include_directories ("${llvm_source}/Target/Hexagon/Utils")
-
-include_directories ("${llvm_source}/Target/Mips")
-include_directories ("${llvm_source}/Target/Mips/AsmParser")
-include_directories ("${llvm_source}/Target/Mips/Disassembler")
-include_directories ("${llvm_source}/Target/Mips/InstPrinter")
-include_directories ("${llvm_source}/Target/Mips/MCTargetDesc")
-include_directories ("${llvm_source}/Target/Mips/TargetInfo")
-include_directories ("${llvm_source}/Target/Mips/Utils")
-
-include_directories ("${llvm_source}/Target/MSP430")
-include_directories ("${llvm_source}/Target/MSP430/AsmParser")
-include_directories ("${llvm_source}/Target/MSP430/Disassembler")
-include_directories ("${llvm_source}/Target/MSP430/InstPrinter")
-include_directories ("${llvm_source}/Target/MSP430/MCTargetDesc")
-include_directories ("${llvm_source}/Target/MSP430/TargetInfo")
-include_directories ("${llvm_source}/Target/MSP430/Utils")
-
-include_directories ("${llvm_source}/Target/NVPTX")
-include_directories ("${llvm_source}/Target/NVPTX/AsmParser")
-include_directories ("${llvm_source}/Target/NVPTX/Disassembler")
-include_directories ("${llvm_source}/Target/NVPTX/InstPrinter")
-include_directories ("${llvm_source}/Target/NVPTX/MCTargetDesc")
-include_directories ("${llvm_source}/Target/NVPTX/TargetInfo")
-include_directories ("${llvm_source}/Target/NVPTX/Utils")
-
-include_directories ("${llvm_source}/Target/PowerPC")
-include_directories ("${llvm_source}/Target/PowerPC/AsmParser")
-include_directories ("${llvm_source}/Target/PowerPC/Disassembler")
-include_directories ("${llvm_source}/Target/PowerPC/InstPrinter")
-include_directories ("${llvm_source}/Target/PowerPC/MCTargetDesc")
-include_directories ("${llvm_source}/Target/PowerPC/TargetInfo")
-include_directories ("${llvm_source}/Target/PowerPC/Utils")
-
-include_directories ("${llvm_source}/Target/Sparc")
-include_directories ("${llvm_source}/Target/Sparc/AsmParser")
-include_directories ("${llvm_source}/Target/Sparc/Disassembler")
-include_directories ("${llvm_source}/Target/Sparc/InstPrinter")
-include_directories ("${llvm_source}/Target/Sparc/MCTargetDesc")
-include_directories ("${llvm_source}/Target/Sparc/TargetInfo")
-include_directories ("${llvm_source}/Target/Sparc/Utils")
-
-include_directories ("${llvm_source}/Target/SystemZ")
-include_directories ("${llvm_source}/Target/SystemZ/AsmParser")
-include_directories ("${llvm_source}/Target/SystemZ/Disassembler")
-include_directories ("${llvm_source}/Target/SystemZ/InstPrinter")
-include_directories ("${llvm_source}/Target/SystemZ/MCTargetDesc")
-include_directories ("${llvm_source}/Target/SystemZ/TargetInfo")
-include_directories ("${llvm_source}/Target/SystemZ/Utils")
-
-include_directories ("${llvm_source}/Target/WebAssembly")
-include_directories ("${llvm_source}/Target/WebAssembly/AsmParser")
-include_directories ("${llvm_source}/Target/WebAssembly/Disassembler")
-include_directories ("${llvm_source}/Target/WebAssembly/InstPrinter")
-include_directories ("${llvm_source}/Target/WebAssembly/MCTargetDesc")
-include_directories ("${llvm_source}/Target/WebAssembly/TargetInfo")
-include_directories ("${llvm_source}/Target/WebAssembly/Utils")
-
-include_directories ("${llvm_source}/Target/X86")
-include_directories ("${llvm_source}/Target/X86/AsmParser")
-include_directories ("${llvm_source}/Target/X86/Disassembler")
-include_directories ("${llvm_source}/Target/X86/InstPrinter")
-include_directories ("${llvm_source}/Target/X86/MCTargetDesc")
-include_directories ("${llvm_source}/Target/X86/TargetInfo")
-include_directories ("${llvm_source}/Target/X86/Utils")
-
-include_directories ("${llvm_source}/Target/XCore")
-include_directories ("${llvm_source}/Target/XCore/AsmParser")
-include_directories ("${llvm_source}/Target/XCore/Disassembler")
-include_directories ("${llvm_source}/Target/XCore/InstPrinter")
-include_directories ("${llvm_source}/Target/XCore/MCTargetDesc")
-include_directories ("${llvm_source}/Target/XCore/TargetInfo")
-include_directories ("${llvm_source}/Target/XCore/Utils")
-
-include_directories ("${llvm_source}/Transforms/Instrumentation")
-include_directories ("${llvm_source}/Transforms/ObjCARC")
-
-##add LLVM sources
-##first level sources
-file(GLOB LLVMAnalysis_srcs . ${llvm_source}/Analysis/*.cpp)
-file(GLOB ASMParser_srcs . ${llvm_source}/ASMParser/*.cpp)
-file(GLOB CodeGen_srcs . ${llvm_source}/CodeGen/*.cpp)
-file(GLOB ExecutionEngine_srcs . ${llvm_source}/ExecutionEngine/*.cpp)
-file(GLOB Fuzzer_srcs . ${llvm_source}/Fuzzer/*.cpp)
-file(GLOB IR_srcs . ${llvm_source}/IR/*.cpp)
-file(GLOB IRReader_srcs . ${llvm_source}/IRReader/*.cpp)
-file(GLOB LibDriver_srcs . ${llvm_source}/LibDriver/*.cpp)
-file(GLOB LineEditor_srcs . ${llvm_source}/LineEditor/*.cpp)
-file(GLOB Linker_srcs . ${llvm_source}/Linker/*.cpp)
-file(GLOB LTO_srcs . ${llvm_source}/LTO/*.cpp)
-file(GLOB MC_srcs . ${llvm_source}/MC/*.cpp)
-file(GLOB Object_srcs . ${llvm_source}/Object/*.cpp)
-file(GLOB Option_srcs . ${llvm_source}/Option/*.cpp)
-file(GLOB Passes_srcs . ${llvm_source}/Passes/*.cpp)
-file(GLOB ProfileData_srcs . ${llvm_source}/ProfileData/*.cpp)
-file(GLOB Support_srcs . ${llvm_source}/Support/*.cpp)
-file(GLOB TableGen_srcs . ${llvm_source}/TableGen/*.cpp)
-file(GLOB Target_srcs . ${llvm_source}/Target/*.cpp)
-file(GLOB Transforms_srcs . ${llvm_source}/Transforms/*.cpp)
-
-##second level sources
-file(GLOB IPS_srcs . ${llvm_source}/Analysis/IPA/*.cpp)
-file(GLOB BitcodeReader_srcs . ${llvm_source}/Bitcode/Reader/*.cpp)
-file(GLOB BitcodeWriter_srcs . ${llvm_source}/Bitcode/Writer/*.cpp)
-file(GLOB AsmPrinter_srcs . ${llvm_source}/CodeGen/AsmPrinter/*.cpp)
-file(GLOB AsmReader_srcs . ${llvm_source}/CodeGen/AsmReader/*.cpp)
-file(GLOB MIRParser_srcs . ${llvm_source}/CodeGen/MIRParser/*.cpp)
-file(GLOB SelectionDAG_srcs . ${llvm_source}/CodeGen/SelectionDAG/*.cpp)
-file(GLOB DWARF_srcs . ${llvm_source}/DebugInfo/DWARF/*.cpp)
-file(GLOB PDB_srcs . ${llvm_source}/DebugInfo/PDB/*.cpp)
-file(GLOB IntelJITEvents_srcs . ${llvm_source}/ExecutionEngine/IntelJITEvents/*.cpp)
-file(GLOB IntelJITEvents_Csrcs . ${llvm_source}/ExecutionEngine/IntelJITEvents/*.c)
-file(GLOB Interpreter_srcs . ${llvm_source}/ExecutionEngine/Interpreter/*.cpp)
-file(GLOB MCJIT_srcs . ${llvm_source}/ExecutionEngine/MCJIT/*.cpp)
-file(GLOB OProfileJIT_srcs . ${llvm_source}/ExecutionEngine/OProfileJIT/*.cpp)
-file(GLOB ORC_srcs . ${llvm_source}/ExecutionEngine/ORC/*.cpp)
-file(GLOB RuntimeDyld_srcs . ${llvm_source}/ExecutionEngine/RuntimeDyld/*.cpp)
-file(GLOB FuzzerTest_srcs . ${llvm_source}/Fuzzer/test/*.cpp)
-file(GLOB MCDisasembler_srcs . ${llvm_source}/MC/MCDisasembler/*.cpp)
-file(GLOB MCParser_srcs . ${llvm_source}/MC/MCParser/*.cpp)
-file(GLOB SupportUnix_srcs . ${llvm_source}/Support/Unix/*.cpp)
-file(GLOB SupportWindows_srcs . ${llvm_source}/Support/Windows/*.cpp)
-file(GLOB AArch64_srcs . ${llvm_source}/Target/AArch64/*.cpp)
-file(GLOB AMDGPU_srcs . ${llvm_source}/Target/AMDGPU/*.cpp)
-file(GLOB ARM_srcs . ${llvm_source}/Target/ARM/*.cpp)
-file(GLOB BPF_srcs . ${llvm_source}/Target/BPF/*.cpp)
-file(GLOB CPPBackend_srcs . ${llvm_source}/Target/CPPBackend/*.cpp)
-file(GLOB Hexagon_srcs . ${llvm_source}/Target/Hexagon/*.cpp)
-file(GLOB Mips_srcs . ${llvm_source}/Target/Mips/*.cpp)
-file(GLOB MSP430_srcs . ${llvm_source}/Target/MSP430/*.cpp)
-file(GLOB NVPTX_srcs . ${llvm_source}/Target/NVPTX/*.cpp)
-file(GLOB PowerPC_srcs . ${llvm_source}/Target/PowerPC/*.cpp)
-file(GLOB Sparc_srcs . ${llvm_source}/Target/Sparc/*.cpp)
-file(GLOB SystemZ_srcs . ${llvm_source}/Target/SystemZ/*.cpp)
-file(GLOB WebAssembly_srcs . ${llvm_source}/Target/WebAssembly/*.cpp)
-file(GLOB X86_srcs . ${llvm_source}/Target/X86/*.cpp)
-file(GLOB XCore_srcs . ${llvm_source}/Target/XCore/*.cpp)
-file(GLOB TransformHello_srcs . ${llvm_source}/Transforms/Hello/*.cpp)
-file(GLOB TransformInstCombine_srcs . ${llvm_source}/Transforms/InstCombine/*.cpp)
-file(GLOB TransformInstrumentation_srcs . ${llvm_source}/Transforms/Instrumentation/*.cpp)
-file(GLOB TransformIPO_srcs . ${llvm_source}/Transforms/IPO/*.cpp)
-file(GLOB TransformObjCARC_srcs . ${llvm_source}/Transforms/ObjCARC/*.cpp)
-file(GLOB TransformScalar_srcs . ${llvm_source}/Transforms/Scalar/*.cpp)
-file(GLOB TransformUtils_srcs . ${llvm_source}/Transforms/Utils/*.cpp)
-file(GLOB TransformVectorize_srcs . ${llvm_source}/Transforms/Vectorize/*.cpp)
-
-##third level sources
-file(GLOB DIA_srcs . ${llvm_source}/DebugInfo/PDB/DIA/*.cpp)
-
-file(GLOB AArch64AsmParser_srcs . ${llvm_source}/Target/AArch64/AsmParser/*.cpp)
-file(GLOB AArch64Disassembler_srcs . ${llvm_source}/Target/AArch64/Disassembler/*.cpp)
-file(GLOB AArch64InstPrinter_srcs . ${llvm_source}/Target/AArch64/InstPrinter/*.cpp)
-file(GLOB AArch64MCTargetDesc_srcs . ${llvm_source}/Target/AArch64/MCTargetDesc/*.cpp)
-file(GLOB AArch64TargetInfo_srcs . ${llvm_source}/Target/AArch64/TargetInfo/*.cpp)
-file(GLOB AArch64Utils_srcs . ${llvm_source}/Target/AArch64/Utils/*.cpp)
-
-file(GLOB AMDGPUAsmParser_srcs . ${llvm_source}/Target/AMDGPU/AsmParser/*.cpp)
-file(GLOB AMDGPUInstPrinter_srcs . ${llvm_source}/Target/AMDGPU/InstPrinter/*.cpp)
-file(GLOB AMDGPUMCTargetDesc_srcs . ${llvm_source}/Target/AMDGPU/MCTargetDesc/*.cpp)
-file(GLOB AMDGPUTargetInfo_srcs . ${llvm_source}/Target/AMDGPU/TargetInfo/*.cpp)
-file(GLOB AMDGPUUtils_srcs . ${llvm_source}/Target/AMDGPU/Utils/*.cpp)
-
-file(GLOB ARMAsmParser_srcs . ${llvm_source}/Target/ARM/AsmParser/*.cpp)
-file(GLOB ARMDisassembler_srcs . ${llvm_source}/Target/ARM/Disassembler/*.cpp)
-file(GLOB ARMInstPrinter_srcs . ${llvm_source}/Target/ARM/InstPrinter/*.cpp)
-file(GLOB ARMMCTargetDesc_srcs . ${llvm_source}/Target/ARM/MCTargetDesc/*.cpp)
-file(GLOB ARMTargetInfo_srcs . ${llvm_source}/Target/ARM/TargetInfo/*.cpp)
-
-file(GLOB BPFInstPrinter_srcs . ${llvm_source}/Target/BPF/InstPrinter/*.cpp)
-file(GLOB BPFMCTargetDesc_srcs . ${llvm_source}/Target/BPF/MCTargetDesc/*.cpp)
-file(GLOB BPFTargetInfo_srcs . ${llvm_source}/Target/BPF/TargetInfo/*.cpp)
-
-file(GLOB CppBackendTargetInfo_srcs . ${llvm_source}/Target/BPF/CppBackend/*.cpp)
-
-file(GLOB HexagonDisassembler_srcs . ${llvm_source}/Target/Hexagon/Disassembler/*.cpp)
-file(GLOB HexagonMCTargetDesc_srcs . ${llvm_source}/Target/Hexagon/MCTargetDesc/*.cpp)
-file(GLOB HexagonTargetInfo_srcs . ${llvm_source}/Target/Hexagon/TargetInfo/*.cpp)
-
-file(GLOB MipsAsmParser_srcs . ${llvm_source}/Target/Mips/AsmParser/*.cpp)
-file(GLOB MipsDisassembler_srcs . ${llvm_source}/Target/Mips/Disassembler/*.cpp)
-file(GLOB MipsInstPrinter_srcs . ${llvm_source}/Target/Mips/InstPrinter/*.cpp)
-file(GLOB MipsMCTargetDesc_srcs . ${llvm_source}/Target/Mips/MCTargetDesc/*.cpp)
-file(GLOB MipsTargetInfo_srcs . ${llvm_source}/Target/Mips/TargetInfo/*.cpp)
-
-file(GLOB MSP430InstPrinter_srcs . ${llvm_source}/Target/MSP430/InstPrinter/*.cpp)
-file(GLOB MSP430MCTargetDesc_srcs . ${llvm_source}/Target/MSP430/MCTargetDesc/*.cpp)
-file(GLOB MSP430TargetInfo_srcs . ${llvm_source}/Target/MSP430/TargetInfo/*.cpp)
-
-file(GLOB NVPTXInstPrinter_srcs . ${llvm_source}/Target/NVPTX/InstPrinter/*.cpp)
-file(GLOB NVPTXMCTargetDesc_srcs . ${llvm_source}/Target/NVPTX/MCTargetDesc/*.cpp)
-file(GLOB NVPTXTargetInfo_srcs . ${llvm_source}/Target/NVPTX/TargetInfo/*.cpp)
-
-file(GLOB PowerPCAsmParser_srcs . ${llvm_source}/Target/PowerPC/AsmParser/*.cpp)
-file(GLOB PowerPCDisassembler_srcs . ${llvm_source}/Target/PowerPC/Disassembler/*.cpp)
-file(GLOB PowerPCInstPrinter_srcs . ${llvm_source}/Target/PowerPC/InstPrinter/*.cpp)
-file(GLOB PowerPCMCTargetDesc_srcs . ${llvm_source}/Target/PowerPC/MCTargetDesc/*.cpp)
-file(GLOB PowerPCTargetInfo_srcs . ${llvm_source}/Target/PowerPC/TargetInfo/*.cpp)
-
-file(GLOB SparcAsmParser_srcs . ${llvm_source}/Target/Sparc/AsmParser/*.cpp)
-file(GLOB SparcDisassembler_srcs . ${llvm_source}/Target/Sparc/Disassembler/*.cpp)
-file(GLOB SparcInstPrinter_srcs . ${llvm_source}/Target/Sparc/InstPrinter/*.cpp)
-file(GLOB SparcMCTargetDesc_srcs . ${llvm_source}/Target/Sparc/MCTargetDesc/*.cpp)
-file(GLOB SparcTargetInfo_srcs . ${llvm_source}/Target/Sparc/TargetInfo/*.cpp)
-
-file(GLOB SystemZAsmParser_srcs . ${llvm_source}/Target/SystemZ/AsmParser/*.cpp)
-file(GLOB SystemZDisassembler_srcs . ${llvm_source}/Target/SystemZ/Disassembler/*.cpp)
-file(GLOB SystemZInstPrinter_srcs . ${llvm_source}/Target/SystemZ/InstPrinter/*.cpp)
-file(GLOB SystemZMCTargetDesc_srcs . ${llvm_source}/Target/SystemZ/MCTargetDesc/*.cpp)
-file(GLOB SystemZTargetInfo_srcs . ${llvm_source}/Target/SystemZ/TargetInfo/*.cpp)
-
-file(GLOB WebAssemblyInstPrinter_srcs . ${llvm_source}/Target/WebAssembly/InstPrinter/*.cpp)
-file(GLOB WebAssemblyMCTargetDesc_srcs . ${llvm_source}/Target/WebAssembly/MCTargetDesc/*.cpp)
-file(GLOB WebAssemblyTargetInfo_srcs . ${llvm_source}/Target/WebAssembly/TargetInfo/*.cpp)
-
-file(GLOB X86AsmParser_srcs . ${llvm_source}/Target/X86/AsmParser/*.cpp)
-file(GLOB X86Disassembler_srcs . ${llvm_source}/Target/X86/Disassembler/*.cpp)
-file(GLOB X86InstPrinter_srcs . ${llvm_source}/Target/X86/InstPrinter/*.cpp)
-file(GLOB X86MCTargetDesc_srcs . ${llvm_source}/Target/X86/MCTargetDesc/*.cpp)
-file(GLOB X86TargetInfo_srcs . ${llvm_source}/Target/X86/TargetInfo/*.cpp)
-file(GLOB X86Utils_srcs . ${llvm_source}/Target/X86/Utils/*.cpp)
-
-file(GLOB XCoreDisassembler_srcs . ${llvm_source}/Target/XCore/Disassembler/*.cpp)
-file(GLOB XCoreInstPrinter_srcs . ${llvm_source}/Target/XCore/InstPrinter/*.cpp)
-file(GLOB XCoreMCTargetDesc_srcs . ${llvm_source}/Target/XCore/MCTargetDesc/*.cpp)
-file(GLOB XCoreTargetInfo_srcs . ${llvm_source}/Target/XCore/TargetInfo/*.cpp)
-
-##set Clang Headers
+##include Clang headers
 set(clang_include ./llvm37/tools/clang/include)
 include_directories ("${clang_include}")
-set(clang_source ./llvm37/tools/clang/lib)
-include_directories ("${clang_include}/ARCMigrate")
-include_directories ("${clang_include}/ASTMatchers/Dynamic")
-include_directories ("${clang_include}/CodeGen")
-include_directories ("${clang_include}/Driver")
-include_directories ("${clang_include}/Format")
-include_directories ("${clang_include}/Headers")
-include_directories ("${clang_include}/Parse")
-include_directories ("${clang_include}/Serialization")
-include_directories ("${clang_include}/StaticANalyzer/Frontend")
-include_directories ("${clang_include}/StaticANalyzer/Core")
-include_directories ("${clang_include}/StaticANalyzer/Checkers")
 
-
-##add Clang sources
-##first level sources
-file(GLOB ClangAnalysis_srcs . ${clang_source}/Analysis/*.cpp)
-file(GLOB ARCMigrate_srcs . ${clang_source}/ARCMigrate/*.cpp)
-file(GLOB AST_srcs . ${clang_source}/AST/*.cpp)
-file(GLOB ASTMatchers_srcs . ${clang_source}/ASTMatchers/*.cpp)
-file(GLOB Basic_srcs . ${clang_source}/Basic/*.cpp)
-file(GLOB CodeGen_srcs . ${clang_source}/CodeGen/*.cpp)
-file(GLOB Driver_srcs . ${clang_source}/Driver/*.cpp)
-file(GLOB Edit_srcs . ${clang_source}/Edit/*.cpp)
-file(GLOB Format_srcs . ${clang_source}/Format/*.cpp)
-file(GLOB Frontend_srcs . ${clang_source}/Frontend/*.cpp)
-file(GLOB FrontendTool_srcs . ${clang_source}/FrontendTool/*.cpp)
-file(GLOB Index_srcs . ${clang_source}/Index/*.cpp)
-file(GLOB Lex_srcs . ${clang_source}/Lex/*.cpp)
-file(GLOB Parse_srcs . ${clang_source}/Parse/*.cpp)
-file(GLOB Rewrite_srcs . ${clang_source}/Rewrite/*.cpp)
-file(GLOB Sema_srcs . ${clang_source}/Sema/*.cpp)
-file(GLOB Serialization_srcs . ${clang_source}/Serialization/*.cpp)
-file(GLOB StaticAnalyzer_srcs . ${clang_source}/StaticAnalyzer/*.cpp)
-file(GLOB Tooling_srcs . ${clang_source}/Tooling/*.cpp)
-
-
-##second level sources
-file(GLOB ASTMatchersDynamic_srcs . ${clang_source}/ASTMatchers/Dynamic/*.cpp)
-file(GLOB FrontendRewrite_srcs . ${clang_source}/Frontend/Rewrite/*.cpp)
-
-file(GLOB StaticAnalyzerChecker_srcs . ${clang_source}/StaticAnalyzer/Checkers/*.cpp)
-file(GLOB StaticAnalyzerCore_srcs . ${clang_source}/StaticAnalyzer/Core/*.cpp)
-file(GLOB StaticAnalyzerFrontend_srcs . ${clang_source}/StaticAnalyzer/Frontend/*.cpp)
-
-file(GLOB ToolingCore_srcs . ${clang_source}/Tooling/Core/*.cpp)
-
-
-## set C++ flags
-SET(CMAKE_CXX_FLAGS "-std=c++0x -Wall")
-set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}")
+##C++ settings
+SET(CMAKE_CXX_FLAGS "-std=c++0x -Wall") #this is wrong, and needs to be fixed
+set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}") #I don't know what this line, or the next, does
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}")
 add_definitions(-D__STDC_CONSTANT_MACROS -D__STDC_LIMIT_MACROS)
 
-##set executable
-add_executable(Cyth
-				clang_interp.cpp
-              ${utility_srcs}
+##now, somehow, we need to link-in LLVM and Clang
+
+
+add_executable(cyth
+              ./clang_interp.cpp
               
-              ${LLVMAnalysis_srcs}
-              ${ASMParser_srcs}
-              ${CodeGen_srcs}
-              ${ExecutionEngine_srcs}
-              ${Fuzzer_srcs}
-              ${IR_srcs}
-              ${IRReader_srcs}
-              ${LibDriver_srcs}
-              ${LineEditor_srcs}
-              ${Linker_srcs}
-              ${LTO_srcs}
-              ${MC_srcs}
-              ${Object_srcs}
-              ${Option_srcs}
-              ${Passes_srcs}
-              ${ProfileData_srcs}
-              ${Support_srcs}
-              ${TableGen_srcs}
-              ${Target_srcs}
-              ${Transforms_srcs}
-              ${IPS_srcs}
-              ${BitcodeReader_srcs}
-              ${BitcodeWriter_srcs}
-              ${AsmPrinter_srcs}
-              ${MIRParser_srcs}
-              ${SelectionDAG_srcs}
-              ${DWARF_srcs}
-              ${PDB_srcs}
-              ${IntelJITEvents_srcs}
-              ${IntelJITEvents_Csrcs}
-              ${Interpreter_srcs}
-              ${MCJIT_srcs}
-              ${OProfileJIT_srcs}
-              ${ORC_srcs}
-              ${RuntimeDyld_srcs}
-              ${FuzzerTest_srcs}
-              ${MCDisasembler_srcs}
-              ${MCParser_srcs}
-              ${SupportUnix_srcs}
-              ${SupportWindows_srcs}
-              ${AArch64_srcs}
-              ${AMDGPU_srcs}
-              ${ARM_srcs}
-              ${BPF_srcs}
-              ${CPPBackend_srcs}
-              ${Hexagon_srcs}
-              ${Mips_srcs}
-              ${MSP430_srcs}
-              ${NVPTX_srcs}
-              ${PowerPC_srcs}
-              ${Sparc_srcs}
-              ${SystemZ_srcs}
-              ${WebAssembly_srcs}
-              ${X86_srcs}
-              ${XCore_srcs}
-              ${TransformHello_srcs}
-              ${TransformInstCombine_srcs}
-              ${TransformInstrumentation_srcs}
-              ${TransformIPO_srcs}
-              ${TransformObjCARC_srcs}
-              ${TransformScalar_srcs}
-              ${TransformUtils_srcs}
-              ${TransformVectorize_srcs}
-              ${DIA_srcs}
-              ${AArch64AsmParser_srcs}
-              ${AArch64Disassembler_srcs}
-              ${AArch64InstPrinter_srcs}
-              ${AArch64MCTargetDesc_srcs}
-              ${AArch64TargetInfo_srcs}
-              ${AArch64Utils_srcs}
-              ${AMDGPUAsmParser_srcs}
-              ${AMDGPUInstPrinter_srcs}
-              ${AMDGPUMCTargetDesc_srcs}
-              ${AMDGPUTargetInfo_srcs}
-              ${AMDGPUUtils_srcs}
-              ${ARMAsmParser_srcs}
-              ${ARMDisassembler_srcs}
-              ${ARMInstPrinter_srcs}
-              ${ARMMCTargetDesc_srcs}
-              ${ARMTargetInfo_srcs}
-              ${BPFInstPrinter_srcs}
-              ${BPFMCTargetDesc_srcs}
-              ${BPFTargetInfo_srcs}
-              ${CppBackendTargetInfo_srcs}
-              ${HexagonDisassembler_srcs}
-              ${HexagonMCTargetDesc_srcs}
-              ${HexagonTargetInfo_srcs}
-              ${MipsAsmParser_srcs}
-              ${MipsDisassembler_srcs}
-              ${MipsInstPrinter_srcs}
-              ${MipsMCTargetDesc_srcs}
-              ${MipsTargetInfo_srcs}
-              ${MSP430InstPrinter_srcs}
-              ${MSP430MCTargetDesc_srcs}
-              ${MSP430TargetInfo_srcs}
-              ${NVPTXInstPrinter_srcs}
-              ${NVPTXMCTargetDesc_srcs}
-              ${NVPTXTargetInfo_srcs}
-              ${PowerPCAsmParser_srcs}
-              ${PowerPCDisassembler_srcs}
-              ${PowerPCInstPrinter_srcs}
-              ${PowerPCMCTargetDesc_srcs}
-              ${PowerPCTargetInfo_srcs}
-              ${SparcAsmParser_srcs}
-              ${SparcDisassembler_srcs}
-              ${SparcInstPrinter_srcs}
-              ${SparcMCTargetDesc_srcs}
-              ${SparcTargetInfo_srcs}
-              ${SystemZAsmParser_srcs}
-              ${SystemZDisassembler_srcs}
-              ${SystemZInstPrinter_srcs}
-              ${SystemZMCTargetDesc_srcs}
-              ${SystemZTargetInfo_srcs}
-              ${WebAssemblyInstPrinter_srcs}
-              ${WebAssemblyMCTargetDesc_srcs}
-              ${WebAssemblyTargetInfo_srcs}
-              ${X86AsmParser_srcs}
-              ${X86Disassembler_srcs}
-              ${X86InstPrinter_srcs}
-              ${X86MCTargetDesc_srcs}
-              ${X86TargetInfo_srcs}
-              ${X86Utils_srcs}
-              ${XCoreDisassembler_srcs}
-              ${XCoreInstPrinter_srcs}
-              ${XCoreMCTargetDesc_srcs}
-              ${XCoreTargetInfo_srcs}
+              ${utils}/lexer.cpp
+              ${utils}/logger.cpp
+              ${utils}/regex.cpp
+              ${utils}/UTF8.cpp
+              ${utils}/parser.cpp)
               
-              ${ClangAnalysis_srcs}
-              ${ARCMigrate_srcs}
-              ${AST_srcs}
-              ${ASTMatchers_srcs}
-              ${Basic_srcs}
-              ${CodeGen_srcs}
-              ${Driver_srcs}
-              ${Edit_srcs}
-              ${Format_srcs}
-              ${Frontend_srcs}
-              ${FrontendTool_srcs}
-              ${Index_srcs}
-              ${Lex_srcs}
-              ${Parse_srcs}
-              ${Rewrite_srcs}
-              ${Sema_srcs}
-              ${Serialization_srcs}
-              ${StaticAnalyzer_srcs}
-              ${Tooling_srcs}
-              ${ASTMatchersDynamic_srcs}
-              ${FrontendRewrite_srcs}
-              ${StaticAnalyzerChecker_srcs}
-              ${StaticAnalyzerCore_srcs}
-              ${StaticAnalyzerFrontend_srcs}
-              ${ToolingCore_srcs}
-              
-              )
-              
-          
+
+add_dependencies(cyth
+  clang-headers
+  )
+
+##clang libraries
+target_link_libraries(cyth
+  clangBasic
+  clangCodeGen
+  clangDriver
+  clangFrontend
+  )
+  
+##LLVMlibraries
+#target_link_libraries(cyth
+#  LLVMCore
+#  LLVMSupport
+#  LLVMExecutionEngine
+#  LLVMMC
+#  LLVMMCJIT
+#  ) 
+  
+  
+  
+  
+  #-I/usr/local/include  -fPIC -fvisibility-inlines-hidden -Wall -W -Wno-unused-parameter 
+  #-Wwrite-strings -Wcast-qual -Wno-missing-field-initializers -pedantic -Wno-long-long 
+  #-Wno-maybe-uninitialized -Wno-comment -std=c++11 -ffunction-sections -fdata-sections   
+  #-D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS
+
+  
+  
+  #system libs
+  #-lrt -ldl -ltinfo -lpthread -lz -lm
+
+#LLVM libraries
+target_link_libraries(cyth
+  LLVMLTO
+  LLVMObjCARCOpts
+  LLVMLinker
+  LLVMBitWriter
+  LLVMIRReader 
+  LLVMXCoreDisassembler
+  LLVMXCoreCodeGen
+  LLVMXCoreDesc
+  LLVMXCoreInfo
+  LLVMXCoreAsmPrinter
+  LLVMSystemZDisassembler
+  LLVMSystemZCodeGen
+  LLVMSystemZAsmParser
+  LLVMSystemZDesc
+  LLVMSystemZInfo
+  LLVMSystemZAsmPrinter
+  LLVMSparcDisassembler
+  LLVMSparcCodeGen
+  LLVMSparcAsmParser
+  LLVMSparcDesc
+  LLVMSparcInfo 
+  LLVMSparcAsmPrinter
+  LLVMR600CodeGen
+  LLVMR600AsmParser
+  LLVMR600Desc
+  LLVMR600Info
+  LLVMR600AsmPrinter
+  LLVMPowerPCDisassembler
+  LLVMPowerPCCodeGen 
+  LLVMPowerPCAsmParser
+  LLVMPowerPCDesc
+  LLVMPowerPCInfo
+  LLVMPowerPCAsmPrinter 
+  LLVMNVPTXCodeGen
+  LLVMNVPTXDesc
+  LLVMNVPTXInfo
+  LLVMNVPTXAsmPrinter 
+  LLVMMSP430CodeGen
+  LLVMMSP430Desc
+  LLVMMSP430Info
+  LLVMMSP430AsmPrinter
+  LLVMMipsDisassembler
+  LLVMMipsCodeGen
+  LLVMMipsAsmParser
+  LLVMMipsDesc
+  LLVMMipsInfo
+  LLVMMipsAsmPrinter
+  LLVMHexagonDisassembler
+  LLVMHexagonCodeGen 
+  LLVMHexagonDesc
+  LLVMHexagonInfo
+  LLVMCppBackendCodeGen
+  LLVMCppBackendInfo
+  LLVMARMDisassembler
+  LLVMARMCodeGen
+  LLVMARMAsmParser
+  LLVMARMDesc
+  LLVMARMInfo
+  LLVMARMAsmPrinter
+  LLVMAArch64Disassembler
+  LLVMAArch64CodeGen
+  LLVMAArch64AsmParser
+  LLVMAArch64Desc
+  LLVMAArch64Info
+  LLVMAArch64AsmPrinter
+  LLVMAArch64Utils
+  LLVMMIRParser
+  LLVMAsmParser
+  LLVMDebugInfoPDB
+  LLVMTableGen
+  LLVMOrcJIT
+  LLVMInstrumentation
+  LLVMOption
+  LLVMX86Disassembler
+  LLVMX86AsmParser
+  LLVMX86CodeGen
+  LLVMSelectionDAG
+  LLVMAsmPrinter
+  LLVMX86Desc
+  LLVMMCDisassembler
+  LLVMX86Info
+  LLVMX86AsmPrinter
+  LLVMX86Utils
+  LLVMMCJIT
+  LLVMDebugInfoDWARF
+  LLVMLineEditor
+  LLVMPasses
+  LLVMipo
+  LLVMVectorize
+  LLVMInterpreter
+  LLVMExecutionEngine
+  LLVMRuntimeDyld
+  LLVMCodeGen
+  LLVMTarget
+  LLVMScalarOpts
+  LLVMProfileData
+  LLVMObject
+  LLVMMCParser
+  LLVMBitReader
+  LLVMInstCombine
+  LLVMTransformUtils
+  LLVMipa
+  #LLVMM
+  LLVMAnalysis
+  LLVMCore
+  LLVMSupport)
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  

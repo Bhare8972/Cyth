@@ -24,6 +24,8 @@ this file is a LALR1 parser,parser_generator, and associated utilities
 using namespace csu;
 using namespace std;
 
+//parser return action
+
 //lexer_function_generic
 lexer_function_generic::lexer_function_generic(unsigned int _ID, bool _return_data)
 {
@@ -158,6 +160,13 @@ production::production(non_terminal* _L_val, std::vector<token_ptr>& _tokens)
     next_production_ID++;
     assoc=NONE;
     precedence=0;
+}
+
+production& production::set_return_action(int i)
+{
+    parser_function_ptr new_parser_func(new parser_return_action(i));
+    action=new_parser_func;
+    return *this;
 }
 
 production& production::set_associativity(association _assoc)

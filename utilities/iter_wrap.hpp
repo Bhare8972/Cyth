@@ -21,6 +21,7 @@ Mainly for use with lists
 #define ITER_WRAP_151128061735
 
 #include <stdexcept>
+#include <iterator>
 
 //utilities for defining languege
 namespace csu{ //cyth standard utilities namespace
@@ -36,6 +37,7 @@ private:
     unsigned int location;
     iterator present_location_iter;
     iterator end_iter;
+    int num_elements;
 
 public:
 
@@ -53,16 +55,18 @@ public:
         end_iter=IW.end_iter;
     }
 
-    iter_wrap(iterator beginning, unsigned int num_elements)
+    iter_wrap(iterator beginning, unsigned int num_elements_)
     {
         location=0;
+        num_elements=num_elements_;
         present_location_iter=beginning;
         for(unsigned int x=0; x<num_elements; x++) ++beginning;//increment beginning to end
         end_iter=beginning;
     }
 
-    iter_wrap(unsigned int num_elements, iterator ending)
+    iter_wrap(unsigned int num_elements_, iterator ending)
     {
+        num_elements=num_elements_;
         location=0;
         end_iter=ending;
         for(unsigned int x=0; x<num_elements; x++) --ending;//decrement ending to beginning
@@ -74,6 +78,12 @@ public:
         location=0;
         end_iter=ending;
         present_location_iter=beginning;
+        num_elements=distance(beginning, ending);
+
+        if( num_elements!=0 and present_location_iter==end_iter)
+        {
+            throw std::out_of_range("I coded this part wrong. Please fix it!");
+        }
     }
 
     iterator begin()
@@ -87,6 +97,11 @@ public:
     iterator end()
     {
         return end_iter;
+    }
+
+    int size()
+    {
+        return num_elements;
     }
 
     return_type& operator[](unsigned int i)
