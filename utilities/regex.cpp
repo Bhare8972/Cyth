@@ -926,8 +926,6 @@ list< shared_ptr<DFA_state> > csu::NFA_to_DFA( list< shared_ptr<NFA_state> >& NF
             auto NFA_transitions=(*next(NFA_states.begin(),NFA_ste))->transitions;
             for(auto NFA_tran : NFA_transitions )
             {
-I AM HERE
-THERE IS SOMETHING WRONG HERE. IF AN NFA_tran SPLITS, WHAT HAPPENS TO THE EXTRA BITS? HOW DO THEY GET CHECKED FOR OVERLAP?
                 if(NFA_tran.start==NFA_state::epsilon)
                 {
                     continue; //ignore epsilon transitions.
@@ -937,10 +935,10 @@ THERE IS SOMETHING WRONG HERE. IF AN NFA_tran SPLITS, WHAT HAPPENS TO THE EXTRA 
                 list< NFA_transition > new_DFA_transitions; //these are new transitions that we are sure don't have overlap. IE: they were already part of a previous DFA transition
                 bool add_NFA_tran=true;
 
-                cout<<"NEW NFA from: "<< NFA_tran.start<< " to "<< NFA_tran.stop<<endl;
+//cout<<"NEW NFA from: "<< NFA_tran.start<< " to "<< NFA_tran.stop<<endl;
                 for(auto& DFA_tran : DFA_transitions) //we are trying to add NFA_tran into DFA_transitions, but we need to remove all overlap
                 {
-                    cout<<"  OLD DFA from: "<< DFA_tran.start<< " to "<< DFA_tran.stop<<endl;
+//cout<<"  OLD DFA from: "<< DFA_tran.start<< " to "<< DFA_tran.stop<<endl;
 
                     if(DFA_tran.is_lesser(NFA_tran.stop) or DFA_tran.is_greater(NFA_tran.start))//new transition is out of range of old transition
                     {
@@ -1028,7 +1026,7 @@ THERE IS SOMETHING WRONG HERE. IF AN NFA_tran SPLITS, WHAT HAPPENS TO THE EXTRA 
                     else if(DFA_tran.in_span(NFA_tran.stop) and DFA_tran.in_span(NFA_tran.start)) //new transition is in old transition
                     {
                         //append DFA_tran states to NFA_tran
-                        NFA_tran.new_states.insert(NFA_tran.new_states.end(), DFA_tran.new_states.begin(),  DFA_tran.new_states.end());
+                        NFA_tran.new_states.insert(NFA_tran.new_states.end(), DFA_tran.new_states.begin(),  DFA_tran.new_states.end()); //place DFA states into NFA transition
                         auto NFA_start=NFA_tran.start.to_UTF32();
                         auto NFA_end=NFA_tran.stop.to_UTF32();
 
@@ -1042,18 +1040,20 @@ THERE IS SOMETHING WRONG HERE. IF AN NFA_tran SPLITS, WHAT HAPPENS TO THE EXTRA 
                     }
                     else if(NFA_tran.in_span(DFA_tran.stop) and NFA_tran.in_span(DFA_tran.start)) //old transition is in new transition
                     {
-                        cout<<"FOUND DFA IN NFA"<<endl;
+//cout<<"FOUND DFA IN NFA"<<endl;
                         //append NFA_tran states to DFA_tran
                         DFA_tran.new_states.insert(DFA_tran.new_states.end(), NFA_tran.new_states.begin(),  NFA_tran.new_states.end());
                         auto DFA_start=DFA_tran.start.to_UTF32();
                         auto DFA_end=DFA_tran.stop.to_UTF32();
 
                         //new_transition
-                        NFA_transition new_tran_end(code_point(DFA_end+1), NFA_tran.stop, NFA_tran.new_states); //new transition, with DFA states
-                        new_DFA_transitions.push_back(new_tran_end);
+                        NFA_transition new_tran(code_point(DFA_end+1), NFA_tran.stop, NFA_tran.new_states); //new transition, with DFA states
+                        NFA_transitions.push_back(new_tran);  //I HOPE!
+cout<<"YO: "<<new_tran.start<<" "<<new_tran.stop<<endl;
+                        //new_DFA_transitions.push_back(new_tran_end);
 
-                        NFA_transition new_tran_begin(NFA_tran.start, code_point(DFA_start-1), NFA_tran.new_states); //new transition, with DFA states
-                        new_DFA_transitions.push_back(new_tran_begin);
+                        //NFA_transition new_tran_begin(NFA_tran.start, code_point(DFA_start-1), NFA_tran.new_states); //new transition, with DFA states
+                        //new_DFA_transitions.push_back(new_tran_begin);
 
                         //modify NFA_tran
                         NFA_tran.stop=code_point(DFA_start-1);
@@ -1091,21 +1091,23 @@ THERE IS SOMETHING WRONG HERE. IF AN NFA_tran SPLITS, WHAT HAPPENS TO THE EXTRA 
         }
 
 
-        cout<<"A DFA STATE"<<endl;
-        cout<<"  accepting:"<<accepting_info<<endl;
-        for(NFA_transition& tran : DFA_transitions)
-        {
-            if(tran.start==NFA_state::epsilon)
-                cout<<"  on epsilon";
-            else
-                cout<<"  from "<<tran.start<<" to "<<tran.stop;
-            cout<<" transition to: ";
-            for(uint ste : tran.new_states)
-            {
-                cout<<ste<<" ";
-            }
-            cout<<endl;
-        }
+cout<<"A DFA STATE"<<endl;
+cout<<"  accepting:"<<accepting_info<<endl;
+for(NFA_transition& tran : DFA_transitions)
+{
+    if(tran.start==NFA_state::epsilon)
+        cout<<"  on epsilon";
+    else
+        cout<<"  from "<<tran.start<<" to "<<tran.stop;
+    cout<<" transition to: ";
+    for(uint ste : tran.new_states)
+    {
+        cout<<ste<<" ";
+    }
+    cout<<endl;
+}
+
+I AM HERE. WHY IS THIS LOOPING BADLY?
 
         shared_ptr<DFA_state> new_DFA_state(new DFA_state(accepting_info));
         //loop over each NFA_transition, making the appropriate DFA states and transitions
@@ -1472,7 +1474,7 @@ pair<int, int> DFA_automation::run(const utf8_string& input, bool print_status)
         state_index=new_state;
         state=DFA_states[state_index];
         chars_read++;
-        cout<<"on "<<input[i]<<" transition to "<<state_index<<endl;
+//cout<<"on "<<input[i]<<" transition to "<<state_index<<endl;
     }
 
     if(state->accepting_info != -1)

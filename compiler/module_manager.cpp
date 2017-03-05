@@ -33,6 +33,7 @@ void module_manager::parse_module(string module_fname, bool reporting)
     cyth_parser->reset_input(input_file);
 
     dyn_holder module_output=cyth_parser->parse(reporting);
+    //// need to check validity of module output here
     module_AST_ptr module_data;
     module_output.cast(module_data);
 

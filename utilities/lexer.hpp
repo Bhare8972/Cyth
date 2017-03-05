@@ -556,6 +556,8 @@ private:
 
     void generate_state_tables()
     {
+        std::cout<<"Generating Lexer"<<std::endl;
+
 
         std::list< std::shared_ptr<DFA_state> > current_state_table;
         std::list< unsigned int > current_lexer_states;
@@ -565,6 +567,8 @@ private:
         auto pattern_end=patterns.end();
         while(lexer_state<=current_state) //loop over each potential state
         {
+            std::cout<<"making state: "<<lexer_state<<std::endl;
+
             std::list< std::shared_ptr<NFA_state> > NFA_of_lexerstate;
             std::shared_ptr<NFA_state> first_state(new NFA_state);
             NFA_of_lexerstate.push_back(first_state);
@@ -572,6 +576,7 @@ private:
             for(  ; pattern_iter!= pattern_end and pattern_iter->state==lexer_state; ++pattern_iter) //loop over each patern that is in the present lexer_state
             {
                 unsigned int chars_counted=0;
+                std::cout<<"    Parsing REGEX: "<<pattern_iter->regular_expression<<std::endl;
                 auto regex_tree=parse_regex(pattern_iter->regular_expression, chars_counted);
                 if( chars_counted< pattern_iter->regular_expression.get_length() )
                     throw gen_exception("full regex cannot be parsed");
@@ -589,6 +594,7 @@ private:
                 NFA_of_lexerstate.insert(NFA_of_lexerstate.end(), new_states.begin(), new_states.end());
             }
 
+            std::cout<<"  converting to DFA"<<std::endl;
             std::list< std::shared_ptr<DFA_state> > DFA_states=NFA_to_DFA(NFA_of_lexerstate);
             DFA_states=DFA_minimization(DFA_states);
 
@@ -601,6 +607,8 @@ private:
         state_table=std::shared_ptr<std::vector< std::shared_ptr<DFA_state> > > (new std::vector< std::shared_ptr<DFA_state> >(current_state_table.begin(), current_state_table.end()) );
         lexer_states=std::shared_ptr<std::vector< unsigned int > >( new std::vector< unsigned int >(current_lexer_states.begin(), current_lexer_states.end()));
         made_table=true;
+
+        std::cout<<"LEXER MADE"<<std::endl;
     }
 };
 #define LEX_FUNC(TYPE) [](const utf8_string& data, const location_span& loc, lexer<TYPE>* lex)->TYPE

@@ -1157,6 +1157,7 @@ list<item_set_ptr> parser_generator::LR0_itemsets(non_terminal_ptr _start_token)
 
 void parser_generator::generate_parser_table()
 {
+    cout<<"Generating Parser"<<endl;
     logger log;
 
     ////augment the grammer////
@@ -1511,6 +1512,8 @@ void parser_generator::generate_parser_table()
 
     //compact action table
     //compact goto table (see pg 276-277)
+
+    cout<<"Parser Generated"<<endl;
 
     parser_table_generated=true;
 }

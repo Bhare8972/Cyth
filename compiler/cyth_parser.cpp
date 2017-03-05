@@ -114,7 +114,7 @@ make_cyth_parser::make_cyth_parser() : cyth_parser_generator("./cyth_parser_tabl
     auto COMA_symbol=cyth_parser_generator.new_terminal(",");
     auto LBRACE_symbol=cyth_parser_generator.new_terminal("{");
     auto RBRACE_symbol=cyth_parser_generator.new_terminal("}");
-    auto NEWLINE_symbol=cyth_parser_generator.new_terminal("\n");
+    auto NEWLINE_symbol=cyth_parser_generator.new_terminal("newline");
 
     //other
     auto INT_term=cyth_parser_generator.new_terminal("integer");
@@ -135,16 +135,16 @@ make_cyth_parser::make_cyth_parser() : cyth_parser_generator("./cyth_parser_tabl
 
     //// define non-terminals ////
     auto MODULE_nonterm  =cyth_parser_generator.new_nonterminal("module"); //start non-term
-    auto FUNC_DEF_nonterm=cyth_parser_generator.new_nonterminal("function definition");
-    auto FUNC_PARAMLIST_nonterm = cyth_parser_generator.new_nonterminal("function parameter list");
+    auto FUNC_DEF_nonterm=cyth_parser_generator.new_nonterminal("function_definition");
+    auto FUNC_PARAMLIST_nonterm = cyth_parser_generator.new_nonterminal("function_parameter_list");
     auto BLOCK_nonterm   =cyth_parser_generator.new_nonterminal("block");
 
 
     auto STATEMENT_nonterm =cyth_parser_generator.new_nonterminal("statement");
     auto EXPRESSION_nonterm=cyth_parser_generator.new_nonterminal("expression");
 
-    auto FUNC_CALL_nonterm=cyth_parser_generator.new_nonterminal("function call");
-    auto FUNC_ARGUMENT_nonterm=cyth_parser_generator.new_nonterminal("function argument list");
+    auto FUNC_CALL_nonterm=cyth_parser_generator.new_nonterminal("function_call");
+    auto FUNC_ARGUMENT_nonterm=cyth_parser_generator.new_nonterminal("function_argument_list");
 
     //define non-term productions//
 
@@ -153,7 +153,7 @@ make_cyth_parser::make_cyth_parser() : cyth_parser_generator("./cyth_parser_tabl
     MODULE_nonterm->add_production({ MODULE_nonterm, FUNC_DEF_nonterm }).set_action<module_AST_ptr>( module_add_function) ;
 
     FUNC_DEF_nonterm->add_production({ DEF_keyword, IDENTIFIER_term, LPAREN_symbol, FUNC_PARAMLIST_nonterm, RPAREN_symbol,
-                                NEWLINE_symbol, RBRACE_symbol, BLOCK_nonterm, LBRACE_symbol}).set_action<funcDef_AST_ptr>( make_function_AST) ;
+                                NEWLINE_symbol, LBRACE_symbol, BLOCK_nonterm, RBRACE_symbol}).set_action<funcDef_AST_ptr>( make_function_AST) ;
 
     FUNC_PARAMLIST_nonterm->add_production({  }).set_action<funcParamList_AST_ptr>( make_funcParamList_AST );
     FUNC_PARAMLIST_nonterm->add_production({ IDENTIFIER_term, IDENTIFIER_term }).set_action<funcParamList_AST_ptr>( make_funcParamList_AST );
