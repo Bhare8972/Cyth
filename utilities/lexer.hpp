@@ -142,37 +142,38 @@ public:
 class lexer_exception : public std::exception
 //a generalized exception class. Does not take charge of deleteing char*
 {
+private:
+    template< typename T, typename...Ts>
+    void add_msg(std::stringstream& stream, T msg_head, Ts... msg)
+    {
+        stream<<msg_head;
+        add_msg(stream, msg...);
+    }
+
+    void add_msg(std::stringstream& stream)
+    {
+        msg=stream.str();
+    }
+
 public:
-    std::stringstream msg;
+    std::string msg;
 
     template<typename... Ts>
     lexer_exception(Ts... _msgs)
     {
-        add_msg(_msgs...);
+        std::stringstream stream;
+        add_msg(stream, _msgs...);
     }
 
-    lexer_exception(const lexer_exception& to_copy) : msg(to_copy.msg.str() )
+    lexer_exception(const lexer_exception& to_copy) : msg(to_copy.msg )
     //copy constructor
     {
     }
 
-    template<typename T, typename... Ts>
-    void add_msg(T input, Ts... inputs)
-    {
-        msg<<input<<" ";
-        add_msg(inputs...);
-    }
 
-    template<typename T>
-    void add_msg(T input)
+    const char* what() const throw()
     {
-        msg<<input;
-    }
-
-    virtual const char* what() const throw()
-    {
-        std::string tmp = msg.str();
-        return tmp.c_str();
+        return msg.c_str();
     }
 };
 
@@ -278,6 +279,7 @@ public:
     {
         while(true)
         {
+
             unsigned int initial_DFA_index=(*lexer_states)[lexer_state];
             unsigned int DFA_state_index=0;
             auto DFA_state=(*state_table)[DFA_state_index+initial_DFA_index];
@@ -311,8 +313,13 @@ public:
                 last_action_index=DFA_state->accepting_info;
             }
 
+
+std::cout<<"C"<<std::endl;
+
             if( has_read_accepting_state )
             {
+
+std::cout<<"A1"<<std::endl;
                 continue_lexing_b=false;
                 utf8_string data=input_buffer->reset_string();
                 location_span span=loc.update(data);
@@ -325,6 +332,7 @@ public:
             }
             else if(input_buffer->has_read_EOF)
             {
+std::cout<<"A2"<<std::endl;
                 if(input_buffer->length_read==0) //legitamate EOF
                 {
                     continue_lexing_b=false;
@@ -348,8 +356,11 @@ public:
             {
                 utf8_string data=input_buffer->reset_string();
                 location_span span=loc.update(data);
+std::cout<<"A3"<<std::endl;
                 throw lexer_exception("Could not read token(", data, ") at ", span);
             }
+
+std::cout<<"B"<<std::endl;
         }
     }
 };
@@ -567,7 +578,6 @@ private:
         auto pattern_end=patterns.end();
         while(lexer_state<=current_state) //loop over each potential state
         {
-            std::cout<<"making state: "<<lexer_state<<std::endl;
 
             std::list< std::shared_ptr<NFA_state> > NFA_of_lexerstate;
             std::shared_ptr<NFA_state> first_state(new NFA_state);
@@ -576,7 +586,6 @@ private:
             for(  ; pattern_iter!= pattern_end and pattern_iter->state==lexer_state; ++pattern_iter) //loop over each patern that is in the present lexer_state
             {
                 unsigned int chars_counted=0;
-                std::cout<<"    Parsing REGEX: "<<pattern_iter->regular_expression<<std::endl;
                 auto regex_tree=parse_regex(pattern_iter->regular_expression, chars_counted);
                 if( chars_counted< pattern_iter->regular_expression.get_length() )
                     throw gen_exception("full regex cannot be parsed");
@@ -594,7 +603,6 @@ private:
                 NFA_of_lexerstate.insert(NFA_of_lexerstate.end(), new_states.begin(), new_states.end());
             }
 
-            std::cout<<"  converting to DFA"<<std::endl;
             std::list< std::shared_ptr<DFA_state> > DFA_states=NFA_to_DFA(NFA_of_lexerstate);
             DFA_states=DFA_minimization(DFA_states);
 

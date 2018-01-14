@@ -21,6 +21,11 @@ This file defines a class that manages parsed modules
 using namespace std;
 using namespace csu;
 
+module_manager::module_manager(bool do_parserTable_IO) : cyth_parser_generator(do_parserTable_IO)
+{
+
+}
+
 
 void module_manager::parse_module(string module_fname, bool reporting)
 {

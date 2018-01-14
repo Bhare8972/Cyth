@@ -29,7 +29,7 @@ module_AST_ptr make_module_AST( parser_function_class::data_T& data )
     return 0;
 }
 
-module_AST_ptr module_add_function( parser_function_class::data_T& data )
+module_AST_ptr module_add_function_AST( parser_function_class::data_T& data )
 {
     return 1;
 }
@@ -45,7 +45,7 @@ funcParamList_AST_ptr make_funcParamList_AST( parser_function_class::data_T& dat
     return 3;
 }
 
-funcParamList_AST_ptr funcParamList_addParam( parser_function_class::data_T& data )
+funcParamList_AST_ptr funcParamList_addParam_AST( parser_function_class::data_T& data )
 {
     return 4;
 }
@@ -56,7 +56,7 @@ block_AST_ptr make_block_AST ( parser_function_class::data_T& data )
     return 5;
 }
 
-block_AST_ptr block_add_statement ( parser_function_class::data_T& data )
+block_AST_ptr block_add_statement_AST ( parser_function_class::data_T& data )
 {
     return 6;
 }
@@ -66,6 +66,11 @@ statement_AST_ptr make_statement_expression_AST ( parser_function_class::data_T&
 {
     return 7;
 }
+
+statement_AST_ptr make_statement_definition_AST ( parser_function_class::data_T& data )
+{
+    return 13;
+};
 
 //expression
 expression_AST_ptr make_expression_funcCall_AST ( parser_function_class::data_T& data )
@@ -78,6 +83,10 @@ expression_AST_ptr make_intLiteral_AST ( parser_function_class::data_T& data )
     return 9;
 }
 
+expression_AST_ptr make_expression_reference_AST ( parser_function_class::data_T& data )
+{
+    return 14;
+}
 
 //function calls
 funcCall_AST_ptr make_funcCall_AST ( parser_function_class::data_T& data )
@@ -95,7 +104,7 @@ funcArgument_AST_ptr funcArgument_addArgument_AST ( parser_function_class::data_
     return 12;
 }
 
-make_cyth_parser::make_cyth_parser() : cyth_parser_generator("./cyth_parser_table", "./cyth_lexer_table")
+make_cyth_parser::make_cyth_parser(bool do_file_IO) : cyth_parser_generator("./cyth_parser_table", "./cyth_lexer_table")
 {
 ////// Define the Cyth grammer!! //////
 
@@ -115,12 +124,13 @@ make_cyth_parser::make_cyth_parser() : cyth_parser_generator("./cyth_parser_tabl
     auto LBRACE_symbol=cyth_parser_generator.new_terminal("{");
     auto RBRACE_symbol=cyth_parser_generator.new_terminal("}");
     auto NEWLINE_symbol=cyth_parser_generator.new_terminal("newline");
+    auto EQUALS_symbol=cyth_parser_generator.new_terminal("=");
 
     //other
     auto INT_term=cyth_parser_generator.new_terminal("integer");
     auto IDENTIFIER_term=cyth_parser_generator.new_terminal("identifier");
 
-    //// set terminal paterns ////
+    //// set terminal patterns ////
     DEF_keyword->add_pattern("def");
 
     LPAREN_symbol->add_pattern("[(]");
@@ -129,6 +139,7 @@ make_cyth_parser::make_cyth_parser() : cyth_parser_generator("./cyth_parser_tabl
     LBRACE_symbol->add_pattern("[{]");
     RBRACE_symbol->add_pattern("[}]");
     NEWLINE_symbol->add_pattern("\\n");
+    EQUALS_symbol->add_pattern("=");
 
     INT_term->add_pattern("[0-9]+");
     IDENTIFIER_term->add_pattern("[# a-z A-Z]+[# 0-9 a-z A-Z]*");
@@ -147,26 +158,27 @@ make_cyth_parser::make_cyth_parser() : cyth_parser_generator("./cyth_parser_tabl
     auto FUNC_ARGUMENT_nonterm=cyth_parser_generator.new_nonterminal("function_argument_list");
 
     //define non-term productions//
-
     MODULE_nonterm->add_production({ })  .set_action<module_AST_ptr>( make_module_AST );
     MODULE_nonterm->add_production({ MODULE_nonterm, NEWLINE_symbol})  .set_return_action( 0 );
-    MODULE_nonterm->add_production({ MODULE_nonterm, FUNC_DEF_nonterm }).set_action<module_AST_ptr>( module_add_function) ;
+    MODULE_nonterm->add_production({ MODULE_nonterm, FUNC_DEF_nonterm }).set_action<module_AST_ptr>( module_add_function_AST) ;
 
     FUNC_DEF_nonterm->add_production({ DEF_keyword, IDENTIFIER_term, LPAREN_symbol, FUNC_PARAMLIST_nonterm, RPAREN_symbol,
                                 NEWLINE_symbol, LBRACE_symbol, BLOCK_nonterm, RBRACE_symbol}).set_action<funcDef_AST_ptr>( make_function_AST) ;
 
     FUNC_PARAMLIST_nonterm->add_production({  }).set_action<funcParamList_AST_ptr>( make_funcParamList_AST );
     FUNC_PARAMLIST_nonterm->add_production({ IDENTIFIER_term, IDENTIFIER_term }).set_action<funcParamList_AST_ptr>( make_funcParamList_AST );
-    FUNC_PARAMLIST_nonterm->add_production({ FUNC_PARAMLIST_nonterm, COMA_symbol, IDENTIFIER_term, IDENTIFIER_term }).set_action<funcParamList_AST_ptr>( funcParamList_addParam );
+    FUNC_PARAMLIST_nonterm->add_production({ FUNC_PARAMLIST_nonterm, COMA_symbol, IDENTIFIER_term, IDENTIFIER_term }).set_action<funcParamList_AST_ptr>( funcParamList_addParam_AST );
 
     BLOCK_nonterm->add_production({ }).set_action<block_AST_ptr>( make_block_AST );
-    BLOCK_nonterm->add_production({ BLOCK_nonterm, STATEMENT_nonterm, NEWLINE_symbol }).set_action<block_AST_ptr>( block_add_statement );
+    BLOCK_nonterm->add_production({ BLOCK_nonterm, STATEMENT_nonterm, NEWLINE_symbol }).set_action<block_AST_ptr>( block_add_statement_AST );
     BLOCK_nonterm->add_production({ BLOCK_nonterm, NEWLINE_symbol }).set_return_action( 0 );
 
     STATEMENT_nonterm->add_production({ EXPRESSION_nonterm }) .set_action<statement_AST_ptr>( make_statement_expression_AST );
+    STATEMENT_nonterm->add_production({ IDENTIFIER_term, IDENTIFIER_term, EQUALS_symbol, EXPRESSION_nonterm}) .set_action<statement_AST_ptr>( make_statement_definition_AST);
 
     EXPRESSION_nonterm->add_production({ FUNC_CALL_nonterm }) .set_action<expression_AST_ptr>( make_expression_funcCall_AST );
     EXPRESSION_nonterm->add_production({ INT_term })   .set_action<expression_AST_ptr>( make_intLiteral_AST );
+    EXPRESSION_nonterm->add_production({ IDENTIFIER_term })   .set_action<expression_AST_ptr>( make_expression_reference_AST );
 
     FUNC_CALL_nonterm->add_production({ IDENTIFIER_term, LPAREN_symbol, FUNC_ARGUMENT_nonterm, RPAREN_symbol }).set_action<funcCall_AST_ptr>( make_funcCall_AST );
 
@@ -176,11 +188,11 @@ make_cyth_parser::make_cyth_parser() : cyth_parser_generator("./cyth_parser_tabl
     //// set other lexer actions ////
     lex_gen->add_nonreturn_pattern("\" \"");//to eat spaces
 
-    get_parser(); //force a build of the parser
+    get_parser(do_file_IO); //force a build of the parser
 }
 
-std::shared_ptr<parser> make_cyth_parser::get_parser()
+std::shared_ptr<parser> make_cyth_parser::get_parser(bool do_file_IO)
 {
-    return cyth_parser_generator.get_parser();
+    return cyth_parser_generator.get_parser(do_file_IO);
 }
 

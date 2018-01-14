@@ -16,7 +16,7 @@ limitations under the License.
 
 This is a set of classes and functions for use with simple UTF-8 regex.
 This is not meant to be a modern competitive regex library, but simply
-functionally usefull, particularly for use in defining lexers.
+functionally useful, particularly for use in defining lexers.
 */
 
 #ifndef LEXER_REGEX_150829030625
@@ -258,7 +258,7 @@ std::shared_ptr<regex_node> parse_regex(const utf8_string& regex_pattern, uint& 
 //helper functions for producing a NFA
 
 NFA_automation compile_regex_NFA(std::list<utf8_string> patterns);
-//take a list of paterns and compile it into a NFA_automation
+//take a list of patterns and compile it into a NFA_automation
 //will raise a gen_exception if the pattern cannot be read
 
 //DFA automation

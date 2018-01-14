@@ -237,16 +237,12 @@ void NFA_automation::print_states()
 
 //regex AST nodes
 void csu::increment_states(list< shared_ptr<NFA_state> >& states, uint incre)
-//increment all the state transitions. Usefull for get_NFA algorithms
+//increment all the state transitions. Useful for get_NFA algorithms
 {
     for(shared_ptr<NFA_state>& ste : states)
     {
         for(NFA_transition& tran : ste->transitions)
         {
-            //for(uint i=0; i<tran.new_states.size(); i++)
-            //{
-                //tran.new_states[i]+=incre;
-            //}
 
             for(auto iter=tran.new_states.begin(), end=tran.new_states.end(); iter!=end; ++iter)
             {
@@ -282,11 +278,6 @@ std::list< std::shared_ptr<NFA_state> > multi_span::get_NFA()
     shared_ptr<NFA_state> final_state(new NFA_state());
     ret.push_back(init_state);
     ret.push_back(final_state);
-
-    //for(uint i=0; i<initial_points.size(); i++)
-    //{
-        //init_state->add_transition(initial_points[i], final_points[i], 1);
-    //}
 
     auto final_points_iter=final_points.begin();
     for(auto initial_pnts_iter=initial_points.begin(), initial_pnts_end=initial_points.end();  initial_pnts_iter!=initial_pnts_end;  ++initial_pnts_iter )
@@ -904,6 +895,8 @@ list< shared_ptr<DFA_state> > csu::NFA_to_DFA( list< shared_ptr<NFA_state> >& NF
         }
 
         //could not find the state
+//cout<<"    new DFA state: "<<state_index<<endl;
+
         all_DFA_states.push_back(state_to_find);
         return state_index;
     }} find_state;
@@ -1049,7 +1042,7 @@ list< shared_ptr<DFA_state> > csu::NFA_to_DFA( list< shared_ptr<NFA_state> >& NF
                         //new_transition
                         NFA_transition new_tran(code_point(DFA_end+1), NFA_tran.stop, NFA_tran.new_states); //new transition, with DFA states
                         NFA_transitions.push_back(new_tran);  //I HOPE!
-cout<<"YO: "<<new_tran.start<<" "<<new_tran.stop<<endl;
+//cout<<"YO: "<<new_tran.start<<" "<<new_tran.stop<<endl;
                         //new_DFA_transitions.push_back(new_tran_end);
 
                         //NFA_transition new_tran_begin(NFA_tran.start, code_point(DFA_start-1), NFA_tran.new_states); //new transition, with DFA states
@@ -1070,6 +1063,13 @@ cout<<"YO: "<<new_tran.start<<" "<<new_tran.stop<<endl;
             }
         }
 
+        //// remove all duplicates from DFA_transitions
+        //// NOTE: Why are there duplicates in the first place??
+        for(NFA_transition& tran: DFA_transitions)
+        {
+                tran.new_states.unique();
+        }
+
         ////now, DFA_transitions is a set of non-overlaping transitions to sets of NFA states
 
         //find accepting info
@@ -1083,14 +1083,17 @@ cout<<"YO: "<<new_tran.start<<" "<<new_tran.stop<<endl;
                 {
                     accepting_info=NFA_ste->accepting_info;
                 }
-                else if( NFA_ste->accepting_info<accepting_info ) //if accepting_info is already set, then check precedance
+                else if( NFA_ste->accepting_info<accepting_info ) //if accepting_info is already set, then check precedence
                 {
                     accepting_info=NFA_ste->accepting_info;
                 }
             }
         }
 
-
+/*
+cout<<endl;
+cout<<endl;
+cout<<endl;
 cout<<"A DFA STATE"<<endl;
 cout<<"  accepting:"<<accepting_info<<endl;
 for(NFA_transition& tran : DFA_transitions)
@@ -1105,9 +1108,7 @@ for(NFA_transition& tran : DFA_transitions)
         cout<<ste<<" ";
     }
     cout<<endl;
-}
-
-I AM HERE. WHY IS THIS LOOPING BADLY?
+}*/
 
         shared_ptr<DFA_state> new_DFA_state(new DFA_state(accepting_info));
         //loop over each NFA_transition, making the appropriate DFA states and transitions
@@ -1140,6 +1141,13 @@ I AM HERE. WHY IS THIS LOOPING BADLY?
                 new_DFA_state->add_transition(DFA_tran.start, DFA_tran.stop, new_DFA_state_index);
             }
         }
+
+        /*
+cout<<"new state "<< return_DFA_states.size() <<" accepting: "<<new_DFA_state->accepting_info<< endl;
+for(auto& DFA_tran: new_DFA_state->transitions)
+{
+    cout<<"  from "<<DFA_tran.start <<" to "<<DFA_tran.stop<<" tran. to: "<<DFA_tran.new_state<<endl;
+}*/
 
         return_DFA_states.push_back(new_DFA_state);
     }

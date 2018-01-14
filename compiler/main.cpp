@@ -18,8 +18,15 @@ This is the entry point for the Cyth compiler
 
 #include "module_manager.hpp"
 
-int main()
+int main(int argc, char *argv[])
 {
-    module_manager cyth_module_manager;
+    module_manager cyth_module_manager(false);
+
+    if(argc == 2)
+    {
+        cyth_module_manager.parse_module(argv[0], true);
+    }
+
+
     std::cout<<"DONE!"<<std::endl;
 }

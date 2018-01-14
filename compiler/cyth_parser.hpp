@@ -28,9 +28,9 @@ private:
     csu::parser_generator cyth_parser_generator;
 
 public:
-    make_cyth_parser();
+    make_cyth_parser(bool do_file_IO=true);
 
-    std::shared_ptr<csu::parser> get_parser();
+    std::shared_ptr<csu::parser> get_parser(bool do_file_IO=true);
 };
 
 #endif

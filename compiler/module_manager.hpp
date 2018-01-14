@@ -32,7 +32,7 @@ private:
     std::map<std::string, module_AST_ptr> parsed_modules;
 
 public:
-    module_manager(){}
+    module_manager(bool do_parserTable_IO=true);
 
     void parse_module(std::string module_fname, bool reporting=false);
 };
