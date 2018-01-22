@@ -19,13 +19,42 @@ This file defines the Cyth syntax and produces the lexer
 #ifndef CYTH_PARSER_170211203515
 #define CYTH_PARSER_170211203515
 
+#include <list>
+
 #include "parser.hpp"
 #include "cyth_AST.hpp"
+
+class cython_lexer : public csu::lexer<csu::token_data>
+{
+private:
+    int STMT_id;
+    int NEW_BLOCK_id;
+    int END_BLOCK_id;
+
+    std::list<long> block_lengths;
+    bool expecting_block;
+
+public:
+    cython_lexer(lex_func_t _EOF_action, std::shared_ptr< std::vector< std::shared_ptr<csu::DFA_state> > > _state_table,
+                std::shared_ptr< std::vector< lex_func_t > > _actions, std::shared_ptr< std::vector< unsigned int> > _lexer_states);
+
+    void set_identifiers(int _STMT_id, int _NEW_BLOCK_id, int _END_BLOCK_id);
+
+    void expect_block();
+
+    csu::token_data lex_newline(csu::utf8_string& data, csu::location_span& loc);
+};
+
+//need to make this a global. No idea how not too.
 
 class make_cyth_parser
 {
 private:
     csu::parser_generator cyth_parser_generator;
+
+    int STMT_id;
+    int NEW_BLOCK_id;
+    int END_BLOCK_id;
 
 public:
     make_cyth_parser(bool do_file_IO=true);

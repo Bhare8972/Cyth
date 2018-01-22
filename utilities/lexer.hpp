@@ -115,7 +115,10 @@ public:
     //load data from the input file
 
     code_point next();
-    //return next charector withott 'reading' it
+    //return next charector without 'reading' it
+
+    bool next_is_EOF();
+    //return if the next codepoint is EOF (as next() won't necisarily say)
 
     code_point read();
     //read the next charector and return it
@@ -181,8 +184,9 @@ template<typename return_type>
 class lexer
 // a class to lex files
 {
-private:
+public:
     typedef std::function<return_type (utf8_string&, location_span&, lexer<return_type>*)>  lex_func_t;
+private:
 
     //the lexing table info
     lex_func_t EOF_action;
@@ -198,6 +202,7 @@ private:
     bool continue_lexing_b; //a variable to tell if we keep lexing after we kind a token?
 
 public:
+
     location loc;
 
     lexer(lex_func_t _EOF_action, std::shared_ptr< std::vector< std::shared_ptr<DFA_state> > > _state_table,
@@ -225,6 +230,7 @@ public:
         input_buffer=std::shared_ptr<ring_buffer>(new ring_buffer(tmp));
     }
 
+    virtual ~lexer() = default;
 
     void print_machine()
     {
@@ -279,7 +285,6 @@ public:
     {
         while(true)
         {
-
             unsigned int initial_DFA_index=(*lexer_states)[lexer_state];
             unsigned int DFA_state_index=0;
             auto DFA_state=(*state_table)[DFA_state_index+initial_DFA_index];
@@ -293,7 +298,21 @@ public:
                     last_action_index=DFA_state->accepting_info;
                 }
 
-                int new_state=DFA_state->get_transition( input_buffer->next() );
+                auto next_char = input_buffer->next();
+                if( next_char.is_empty() )
+                {
+                    if( input_buffer->next_is_EOF() )
+                    {
+                        input_buffer->read();//read the EOF
+                        break;
+                    }
+                    else
+                    {
+                        throw lexer_exception("empty codepoint");
+                    }
+                }
+
+                int new_state=DFA_state->get_transition( next_char );
                 if(new_state==-1)
                 {
                     break; //no transition
@@ -313,13 +332,8 @@ public:
                 last_action_index=DFA_state->accepting_info;
             }
 
-
-std::cout<<"C"<<std::endl;
-
             if( has_read_accepting_state )
             {
-
-std::cout<<"A1"<<std::endl;
                 continue_lexing_b=false;
                 utf8_string data=input_buffer->reset_string();
                 location_span span=loc.update(data);
@@ -332,7 +346,6 @@ std::cout<<"A1"<<std::endl;
             }
             else if(input_buffer->has_read_EOF)
             {
-std::cout<<"A2"<<std::endl;
                 if(input_buffer->length_read==0) //legitamate EOF
                 {
                     continue_lexing_b=false;
@@ -354,13 +367,12 @@ std::cout<<"A2"<<std::endl;
             }
             else
             {
+                input_buffer->read(); //nead to read the char we couldn't transition on.
                 utf8_string data=input_buffer->reset_string();
                 location_span span=loc.update(data);
-std::cout<<"A3"<<std::endl;
-                throw lexer_exception("Could not read token(", data, ") at ", span);
+                throw lexer_exception("Could not read token (", data, ") ", span);
             }
 
-std::cout<<"B"<<std::endl;
         }
     }
 };
@@ -466,7 +478,7 @@ public:
         }
     }
 
-    lexer<return_type> get_lexer(bool do_file_IO=true)
+    std::shared_ptr< lexer<return_type> > get_lexer(bool do_file_IO=true)
     {
         if( not made_table)
         {
@@ -482,7 +494,27 @@ public:
             }
         }
 
-        return lexer<return_type>(EOF_action, state_table, actions, lexer_states);
+        return std::make_shared< lexer<return_type> >(EOF_action, state_table, actions, lexer_states);
+    }
+
+    template<class lexertype>
+    std::shared_ptr< lexertype > get_lexer(bool do_file_IO=true)
+    {
+        if( not made_table)
+        {
+            if(do_file_IO)
+            {
+                load_from_file();
+            }
+
+            if(not made_table)
+            {
+                generate_state_tables();
+                if(do_file_IO) load_to_file();
+            }
+        }
+
+        return std::make_shared< lexertype >(EOF_action, state_table, actions, lexer_states);
     }
 
     void load_from_file()

@@ -493,6 +493,28 @@ public:
 
     std::shared_ptr<parser> get_parser(bool do_file_IO=true);
 
+    template<class lexertype, class parsertype>
+    std::shared_ptr<parsertype> get_parser(bool do_file_IO=true)
+    {
+        if(not parser_table_generated)
+        {
+            if(do_file_IO)
+            {
+                load_from_file();
+            }
+
+            if( not parser_table_generated)
+            {
+                generate_parser_table();
+                if(do_file_IO) load_to_file();
+            }
+        }
+
+        std::shared_ptr<lexertype> new_lex = lex_gen->get_lexer<lexertype>(do_file_IO);
+        auto new_lex2 = std::static_pointer_cast< lexer<token_data> >( new_lex );
+        return std::make_shared< parser >(new_lex2, term_map, production_information, state_table);
+    }
+
 private: //functions usefull for terminal and non_terminal
     friend class terminal;
     friend class non_terminal;
@@ -516,10 +538,10 @@ private: //languege processing functions
     void load_to_file();
 };
 
+/// TODO: fix lexer to be shared_ptr
 class parser
 {
 private:
-    lexer<token_data> lex;
     std::shared_ptr< std::map<unsigned int, utf8_string> > term_map; //map terminal ID to terminal name
     std::shared_ptr< std::vector<production_info_ptr> > production_information;
     std::shared_ptr< std::vector<parser_state> > state_table;
@@ -532,8 +554,9 @@ private:
     int parse_step(bool reporting=false);
 
 public:
+    std::shared_ptr<lexer<token_data> > lex;
 
-    parser(lexer<token_data>& _lex, std::shared_ptr< std::map<unsigned int, utf8_string> > _term_map,
+    parser(std::shared_ptr<lexer<token_data> > _lex, std::shared_ptr< std::map<unsigned int, utf8_string> > _term_map,
            std::shared_ptr< std::vector<production_info_ptr> > _production_information, std::shared_ptr< std::vector<parser_state> > _state_table);
 
     std::shared_ptr<parser> copy();

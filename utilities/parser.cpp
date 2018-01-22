@@ -768,8 +768,8 @@ shared_ptr<parser> parser_generator::get_parser(bool do_file_IO)
         }
     }
 
-    lexer<token_data> new_lex=lex_gen->get_lexer(do_file_IO);
-    return shared_ptr<parser>(new parser(new_lex, term_map, production_information, state_table));
+    auto new_lex = lex_gen->get_lexer(do_file_IO);
+    return make_shared< parser >(new_lex, term_map, production_information, state_table);
 }
 
 void parser_generator::resolve_unknown_terminal(token_ptr _new_terminal) //this is for when the terminal is referanced by a string
@@ -1522,14 +1522,14 @@ void parser_generator::generate_parser_table()
 
 
 //begin parser class
-
-parser::parser(lexer<token_data>& _lex, shared_ptr< map<unsigned int, utf8_string> > _term_map,
+parser::parser(std::shared_ptr<lexer<token_data> > _lex, shared_ptr< map<unsigned int, utf8_string> > _term_map,
        shared_ptr< vector<production_info_ptr> > _production_information, shared_ptr< vector<parser_state> > _state_table) : lex(_lex)
 {
-   term_map=_term_map;
-   production_information=_production_information;
-   state_table=_state_table;
-   error_recovery=0;
+    lex = _lex;
+    term_map=_term_map;
+    production_information=_production_information;
+    state_table=_state_table;
+    error_recovery=0;
 }
 
 shared_ptr<parser> parser::copy()
@@ -1539,10 +1539,12 @@ shared_ptr<parser> parser::copy()
 
 dyn_holder parser::parse(bool reporting)
 {
+
     stack.clear();
     stack.push_back( token_data(0, dyn_holder(), location_span() ) ); //push state 0
-    next_terminal=lex();
+    next_terminal=(*lex)();
     error_recovery=0;
+
 
     int state=0;
     bool had_error=false;
@@ -1595,7 +1597,7 @@ int parser::parse_step(bool reporting)
             }
             else
             {
-                next_terminal=lex();//throw away affending terminal
+                next_terminal = (*lex)();//throw away affending terminal
                 return 3;
             }
         }
@@ -1609,8 +1611,9 @@ int parser::parse_step(bool reporting)
 
         if( reporting )
         {
-            cout<<"  ERROR"<<endl<<"  STACK";
+            cout<<"  ERROR"<<endl<<"  STACK ";
             state_string(cout);
+            cout<<endl;
         }
 
         //// COMENCE ERROR RECOVERY
@@ -1638,7 +1641,7 @@ int parser::parse_step(bool reporting)
         unsigned int new_state_id=curr_state.get_action( error_token_id ).get_data();
         token_data new_state(new_state_id, next_terminal.data(), next_terminal.loc() );
         stack.push_back(new_state);
-        next_terminal=lex();
+        next_terminal = (*lex)();
 
         return 3;
     }
@@ -1691,7 +1694,7 @@ int parser::parse_step(bool reporting)
         unsigned int state_id=action.get_data();
         token_data new_state(state_id, next_terminal.data(), next_terminal.loc() );
         stack.push_back(new_state);
-        next_terminal=lex();
+        next_terminal = (*lex)();
         if(reporting)
         {
             cout<<"  STACK: ";
@@ -1739,19 +1742,19 @@ void parser::state_string(std::ostream& os)
 void parser::reset_input(utf8_string& file_name)
 {
     reset();
-    lex.set_input(file_name);
+    lex->set_input(file_name);
 }
 
 void parser::reset_input(const std::istream& _input)
 {
     reset();
-    lex.set_input(_input);
+    lex->set_input(_input);
 }
 
 void parser::reset()
 {
     stack.clear();
     next_terminal=token_data();
-    lex.reset();
+    lex->reset();
 }
 

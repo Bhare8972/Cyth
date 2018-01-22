@@ -157,7 +157,6 @@ void ring_buffer::load_data()
         has_loaded_EOF=true;
         return;
     }
-
     while( (empty_node->next != start_node) and (not fin.eof()))
     {
         empty_node->charector=code_point(fin);
@@ -186,6 +185,20 @@ code_point ring_buffer::next()
         return code_point();
     }
     return end_node->charector;
+}
+
+bool ring_buffer::next_is_EOF()
+//return if the next codepoint is EOF (as next() won't necisarily say)
+{
+    if(end_node==empty_node)
+    {
+        load_data();
+        if(end_node==empty_node and has_loaded_EOF)
+        {
+            return true;
+        }
+    }
+    return false;
 }
 
 code_point ring_buffer::read()

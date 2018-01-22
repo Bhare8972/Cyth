@@ -24,7 +24,8 @@ int main(int argc, char *argv[])
 
     if(argc == 2)
     {
-        cyth_module_manager.parse_module(argv[0], true);
+        std::cout<<"opening: "<<argv[1]<<std::endl;
+        cyth_module_manager.parse_module(argv[1], true);
     }
 
 

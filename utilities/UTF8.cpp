@@ -113,6 +113,7 @@ code_point::code_point(std::istream& input_stream)
     code_units=new uint8_t[NUNITS];
     code_units[0]=first_char;
 
+
     int a=1;
     switch(NUNITS)
     {
