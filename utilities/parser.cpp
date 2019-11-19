@@ -160,6 +160,7 @@ production::production(non_terminal* _L_val, std::vector<token_ptr>& _tokens)
     next_production_ID++;
     assoc=NONE;
     precedence=0;
+    action = nullptr;
 }
 
 production& production::set_return_action(int i)
@@ -1661,6 +1662,10 @@ int parser::parse_step(bool reporting)
 
         ////run user action
         parser_function_class::data_T arguments(datum);
+        if( not prod_info->action )
+        {
+            throw gen_exception("PRODUCTION DOES NOT HAVE ACTION");
+        }
         dyn_holder new_data = prod_info->action->call(arguments);
 
         //// make new location_span ////
@@ -1716,7 +1721,7 @@ int parser::parse_step(bool reporting)
     }
     else
     {
-        throw general_exception("ERROR: UNSET ACTION");
+        throw gen_exception("ERROR: UNSET ACTION");
 
         if( reporting )
         {

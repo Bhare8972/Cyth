@@ -773,6 +773,6 @@ bool csu::operator< (const utf8_string& lhs, const utf8_string& rhs)
         if( lhs.points[i]>rhs.points[i] ) return false;
     }
 
-    return true;
+    return false;
 }
 

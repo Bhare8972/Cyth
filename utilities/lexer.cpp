@@ -62,6 +62,31 @@ location& location::operator=(const location& other)
     return *this;
 }
 
+bool location::operator<(const location& LHS) const
+{
+    return (line<LHS.line) or (line==LHS.line and column<LHS.column);
+}
+
+bool location::operator==(const location& LHS) const
+{
+    return (line==LHS.line) and (column==LHS.column);
+}
+
+bool location::operator<=(const location& LHS) const
+{
+    return ((*this)<LHS) or ((*this)==LHS);
+}
+
+bool location::operator>(const location& LHS) const
+{
+    return not ((*this)<=LHS);
+}
+
+bool location::operator>=(const location& LHS) const
+{
+    return not ((*this)<LHS);;
+}
+
 ostream& csu::operator<<(ostream& os, const location& dt)
 {
     os<<"line "<<dt.line<<":"<<dt.column;
@@ -83,9 +108,49 @@ location_span::location_span(const location_span& RHS)
 
 location_span::location_span(){}
 
-location_span csu::operator+(const location_span& LHS, const location_span& RHS)
+location_span csu::operator+( const location_span& LHS, const location_span& RHS)
 {
-    return location_span(LHS.start, RHS.end);
+    location start = LHS.start;
+    if( LHS.start > RHS.start  )
+    {
+        start = RHS.start;
+    }
+
+    location end = RHS.end;
+    if(LHS.end > RHS.end)
+    {
+        end = LHS.end;
+    }
+
+    return location_span(start, end);
+}
+
+location_span csu::operator+( location_span& LHS, location_span& RHS)
+{
+    location start = LHS.start;
+    if( LHS.start > RHS.start  )
+    {
+        start = RHS.start;
+    }
+
+    location end = RHS.end;
+    if(LHS.end > RHS.end)
+    {
+        end = LHS.end;
+    }
+
+    return location_span(start, end);
+}
+
+
+bool location_span::strictly_GT(const location_span& LHS)
+{
+    return start>LHS.end;
+}
+
+bool location_span::strictly_LT(const location_span& LHS)
+{
+    return end<LHS.start;
 }
 
 ostream& csu::operator<<(ostream& os, const location_span& dt)
@@ -288,6 +353,41 @@ void ring_buffer::put(utf8_string& data)
 }
 
 void ring_buffer::insert(utf8_string& data)
+//place data before start_node, then move start_node backwards
+// throws error if any chars read
+{
+    if(length_read != 0 )
+    {
+        throw gen_exception("RING BUFFER ERROR: INSEART CALLED WHEN READ !=0");
+    }
+
+    unsigned int L = data.get_length();
+    if(L==0) return;
+
+    if( (n_nodes-length_loaded)<= L)//check to see if we have enough space
+    {
+        add_nodes(L-(n_nodes-length_loaded)+1);
+    }
+
+    // backup start by L
+    for( int i=0; i<L; i++)
+    {
+        start_node = start_node->previous;
+    }
+    end_node = start_node;
+
+    // now inject the charectors
+    auto working_node = start_node;
+    for(auto& charector : data)
+    {
+        working_node->charector = charector;
+        working_node = working_node->next;
+        length_loaded++;
+    }
+
+
+}
+/*
 //place data before end_node
 {
     if(data.get_length()==0) return;
@@ -308,7 +408,7 @@ void ring_buffer::insert(utf8_string& data)
     end_node->previous=previous_node;
     end_node=before_data->next;
     has_read_EOF=false;
-}
+}*/
 
 void ring_buffer::reject()
 //reject the read string. back end_node to start_node

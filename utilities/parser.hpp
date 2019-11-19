@@ -79,7 +79,7 @@ public:
     template<typename ret_T>
     ret_T data()
     {
-        return t_data.cast<ret_T>();
+        return *t_data.cast<ret_T>();
     }
 
     template<typename ret_T>
@@ -117,7 +117,7 @@ public:
 };
 
 class parser_return_action : public parser_function_class
-//a simple action for the parser to just return the data assocated with the ith token
+//a simple action for the parser to just return the data associated with the ith token
 {
 private:
     int ith_token;
