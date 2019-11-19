@@ -54,6 +54,13 @@ class location
     location& operator=(const location& other) ;
     //assignment
 
+    bool operator<(const location& LHS) const;
+    bool operator==(const location& LHS) const;
+
+    bool operator<=(const location& LHS) const;
+    bool operator>(const location& LHS) const;
+    bool operator>=(const location& LHS) const;
+
     location_span update(utf8_string& input); //moves the location forward by the input. Return the span between new and old positions
 };
 std::ostream& operator<<(std::ostream& os, const location& dt);
@@ -71,8 +78,12 @@ class location_span
     location_span(const location& _start, const location& _end);
     location_span(const location_span& RHS);
     location_span();
+
+    bool strictly_GT(const location_span& LHS);
+    bool strictly_LT(const location_span& LHS);
 };
 location_span operator +(const location_span& LHS, const location_span& RHS);
+location_span operator +( location_span& LHS, location_span& RHS);
 std::ostream& operator<<(std::ostream& os, const location_span& dt);
 
 class ring_buffer
@@ -136,7 +147,8 @@ public:
     //put data before empty_node
 
     void insert(utf8_string& data);
-    //place data before end_node
+    //place data before start_node, then move start_node backwards
+    //throws error if any chars read
 
     void reject();
     //reject the read string. back end_node to start_node
@@ -338,7 +350,7 @@ public:
                 utf8_string data=input_buffer->reset_string();
                 location_span span=loc.update(data);
                 auto ret_data=(*actions)[last_action_index](data, span, this); //control functions can be called here, and change lexer state
-                std::string tmp;
+                //std::string tmp;
                 if(not continue_lexing_b)
                 {
                     return ret_data;

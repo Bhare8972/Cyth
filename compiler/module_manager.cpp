@@ -17,19 +17,25 @@ This file defines a class that manages parsed modules
 */
 
 #include "module_manager.hpp"
+#include "basic_AST_visitors.hpp"
 
 using namespace std;
 using namespace csu;
 
-module_manager::module_manager(bool do_parserTable_IO) : cyth_parser_generator(do_parserTable_IO)
+module_manager::module_manager(bool do_parserTable_IO) :
+    cyth_parser_generator(do_parserTable_IO)
 {
 
 }
 
 
-void module_manager::parse_module(string module_fname, bool reporting)
+module_AST_ptr module_manager::parse_module(string module_fname, bool reporting)
 {
-    if( parsed_modules.find(module_fname) != parsed_modules.end() ) return;
+    string module_name = module_fname.substr(0, module_fname.find('.'));
+
+    auto found_fname = parsed_modules.find(module_name);
+    if( found_fname != parsed_modules.end() )
+    {   return found_fname->second; }
 
     shared_ptr<parser> cyth_parser =  cyth_parser_generator.get_parser();
 
@@ -37,13 +43,43 @@ void module_manager::parse_module(string module_fname, bool reporting)
     input_file.open(module_fname);
     cyth_parser->reset_input(input_file);
 
-    dyn_holder module_output=cyth_parser->parse(reporting);
-    //// need to check validity of module output here
-    module_AST_ptr module_data;
-    module_output.cast(module_data);
+    dyn_holder module_output = cyth_parser->parse(reporting);
+    module_AST_ptr module_data = *module_output.cast<module_AST_ptr>();
 
-    parsed_modules.insert( make_pair(module_fname, module_data) );
+    //// here we process the AST into a usable state ////
 
+    //first the symbol table
+   // module_data->set_symbol_table( module_name );
+    set_symbol_table set_vstr(module_data.get(), module_name);
+    module_data->apply_visitor(&set_vstr);
+
+
+    for( uint i=0; i<module_data->max_symbol_loops; i++)
+    {
+        build_symbol_table build_vstr;
+        module_data->apply_visitor(&build_vstr);
+        if( not build_vstr.changes_were_made )
+        {
+            break;
+        }
+    }
+
+    //bool sym_table_good = module_data->verify_symbol_table();
+
+    verify_symbol_table verify_vstr(true);
+    module_data->apply_visitor(&verify_vstr);
+    bool sym_table_good = module_data->symbol_table_verified;
+
+
+    if( not sym_table_good)
+    {
+        cout << "ERROR: module '" << module_fname << "' symbols could not be defined." << endl;
+        module_data = nullptr;
+    }
+
+    parsed_modules.insert( make_pair(module_name, module_data) );
+
+    return module_data;
 }
 
 

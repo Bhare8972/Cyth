@@ -22,6 +22,8 @@ Inspired by any.cpp by Christipher Diggins.
 #include <exception>
 #include <list>
 #include <type_traits>
+#include <typeinfo>
+#include <typeindex>
 #include <tuple>
 #include <functional>
 
@@ -32,10 +34,23 @@ class bad_type_erasure_cast : public std::exception
 //a generalized exception class. Does not take charge of deleteing char*
 {
 public:
+    std::type_index from;
+    std::type_index to;
+    bad_type_erasure_cast(std::type_index _from, std::type_index _to) :
+        from( _from ),
+        to( _to )
+    {
+    }
 
     virtual const char* what() const throw()
     {
-        return "bad type_erasure cast";
+        std::string a = "bad type_erasure cast. Am trying to cast from ";
+        a += from.name();
+        a += " to ";
+        a += to.name();
+        a += ".";
+
+        return a.c_str();
     }
 };
 
@@ -65,6 +80,8 @@ protected:
         virtual dyn_holder call_func(void* cls, std::list<dyn_holder>& arguments)=0; //call function with many arguments
         virtual base_policy* get_policy()=0;
 
+        virtual std::type_index get_typeid()=0;
+
         virtual ~base_policy(){} //virtual destructor
     };
 
@@ -78,6 +95,11 @@ protected:
         { throw method_not_implemented(); }
         virtual dyn_holder call_func(void* cls, std::list<dyn_holder>& arguments) //call function with many arguments
         { throw method_not_implemented(); }
+
+        virtual std::type_index get_typeid()
+        {
+            return std::type_index( typeid(T) );
+        }
 
         virtual base_policy* get_policy()
         {
@@ -118,12 +140,12 @@ public:
         type_information=get_policy<T>();
     }
 
-    template<typename T>
-    dyn_holder(std::shared_ptr<T> new_data)
-    {
-        data=std::static_pointer_cast<void>(new_data);
-        type_information=get_policy<T>();
-    }
+    //template<typename T>
+    //dyn_holder(std::shared_ptr<T> new_data)
+    //{
+    //    data=std::static_pointer_cast<void>(new_data);
+    //    type_information=get_policy<T>();
+    //}
 
     dyn_holder(const dyn_holder& new_data )
     {
@@ -165,16 +187,16 @@ public:
     {
         if(get_policy<T>() != type_information->get_policy())
         {
-            throw bad_type_erasure_cast();
+            throw bad_type_erasure_cast( type_information->get_typeid(), typeid(T) );
         }
         return std::static_pointer_cast<T>(data);
     }
 
-    template<typename T>
-    void cast(std::shared_ptr<T>& out) const
-    {
-        out=cast<T>();
-    }
+//    template<typename T>
+//    void cast(std::shared_ptr<T>& out) const
+//    {
+//        out=cast<T>();
+//    }
 
     template<typename T>
     void cast(T& out) const
@@ -438,7 +460,7 @@ public:
 };
 
 /* where to go from here:
-combine dyn_holder and dyn_method 
+combine dyn_holder and dyn_method
 * extend dyn_method to work with non-method functions, and with functions and methods that don't have return types
 * extend both of them to support basic operators. (or error otherwise, using enable_if)
 * create a new, extended, type that holds a dictionary to multiple methods, creating a python-like type that can hold C++ classes
@@ -526,9 +548,9 @@ private:
     {
         public:
         virtual dyn_holder call_func(std::list<dyn_holder>& arguments)=0; //call function with many arguments
-        virtual ~base_func(){}; 
+        virtual ~base_func(){};
     };
-    
+
     template<typename func_return, typename...func_args>
     class func_type : public base_func
     {
@@ -540,7 +562,7 @@ private:
             func=_func;
         }
         ~func_type(){}
-        
+
         dyn_holder call_func(std::list<dyn_holder>& arguments)
         {
             //return call_deravel<argsT...>(cls, arguments.begin(), arguments.end());
@@ -548,69 +570,69 @@ private:
             return apply_wrap_func<sizeof...(func_args)>::deravel(func, t, arguments.begin(), arguments.end());
         }
     };
-    
+
     std::shared_ptr<base_func> erased_func;
-    
+
     template<typename func_return, typename...func_args>//set from a std::function
     void set(std::function<func_return (func_args...)> _func)
     {
         erased_func=std::shared_ptr<base_func>(new func_type<func_return, func_args...>(_func));
     }
-    
+
 public:
     dyn_func()
     {
         erased_func=0;
     }
-    
+
     template<typename func_return, typename...func_args>//construct from a std::function
     dyn_func(std::function<func_return (func_args...)> _func)
     {
         erased_func=std::shared_ptr<base_func>(new func_type<func_return, func_args...>(_func));
     }
-    
+
     template <typename func_return, typename...func_args> //const from a function pointer
     dyn_func( func_return(*_func)(func_args...) )
     {
         auto _stdF=std::function<func_return(func_args...)>(_func);
         erased_func=std::shared_ptr<base_func>(new func_type<func_return, func_args...>(_stdF));
     }
-    
+
     template<typename object_T, typename func_return, typename...func_args> //construct from a method
     dyn_func(object_T& obj, func_return(object_T::*method)(func_args...))
     {
         std::function<func_return(func_args...)> _stdF( std::bind(method, &obj, std::placeholders::_1, std::placeholders::_2) );
         erased_func=std::shared_ptr<base_func>(new func_type<func_return, func_args...>(_stdF));
-    } 
-    
+    }
+
     template<typename F> //construct from a lambda function
     dyn_func(F const &func)
     {
         set(FFL(func));
-    } 
-    
+    }
+
     dyn_func(const dyn_func& to_copy)
     {
         erased_func=to_copy.erased_func;
     }
-    
+
     dyn_func& operator=(const dyn_func& to_copy)
     {
         erased_func=to_copy.erased_func;
         return *this;
     }
-    
+
     dyn_holder operator()()
     {
         auto tmp=std::list<dyn_holder>();
         return erased_func->call_func(tmp);
     }
-    
+
     dyn_holder operator()(std::list<dyn_holder>& arguments)
     {
         return erased_func->call_func(arguments);
     }
-    
+
     template<typename...argument_types>
     dyn_holder operator()(argument_types...args)
     //a special function to pack arguments into a list
