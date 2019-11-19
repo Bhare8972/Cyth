@@ -17,23 +17,28 @@ set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3")
 
 add_executable(cyth
 	      ${compiler}/main.cpp
-              ${compiler}/cyth_parser.cpp
+          ${compiler}/cyth_parser.cpp
 	      ${compiler}/module_manager.cpp
-              
+	      ${compiler}/cyth_AST.cpp
+	      ${compiler}/sym_table.cpp
+	      ${compiler}/writeAST_to_C.cpp
+	      ${compiler}/AST_visitor.cpp
+	      ${compiler}/basic_AST_visitors.cpp
+
               ${utils}/lexer.cpp
               ${utils}/logger.cpp
               ${utils}/regex.cpp
               ${utils}/UTF8.cpp
               ${utils}/parser.cpp)
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
+
+
+
+
+
+
+
+
+
+
+
+
