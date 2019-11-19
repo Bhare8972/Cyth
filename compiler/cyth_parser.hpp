@@ -21,8 +21,8 @@ This file defines the Cyth syntax and produces the lexer
 
 #include <list>
 
-#include "parser.hpp"
 #include "cyth_AST.hpp"
+#include "parser.hpp"
 
 class cython_lexer : public csu::lexer<csu::token_data>
 {
@@ -42,6 +42,7 @@ public:
 
     void expect_block();
 
+    csu::token_data lex_eatnewline(csu::utf8_string& data, csu::location_span& loc);
     csu::token_data lex_newline(csu::utf8_string& data, csu::location_span& loc);
 };
 

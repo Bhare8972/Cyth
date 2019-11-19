@@ -1,5 +1,6 @@
+
 /*
-Copyright 2015 Brian Hare
+Copyright 2019 Brian Hare
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -13,28 +14,16 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 
-This file defines a class that manages parsed modules
+This file defines the functions to write the AST to C. Assuming the AST has been fully processed.
 */
 
-#ifndef MODULE_MANAGER_170212090515
-#define MODULE_MANAGER_170212090515
+#ifndef WRITEAST_TO_C_191101195347
+#define WRITEAST_TO_C_191101195347
 
 #include <string>
-#include <map>
-#include <fstream>
+#include "cyth_AST.hpp"
 
-#include "cyth_parser.hpp"
+void write_module_to_C(module_AST_ptr module, std::string fout_name);
 
-class module_manager
-{
-private:
-    make_cyth_parser cyth_parser_generator;
-    std::map<std::string, module_AST_ptr> parsed_modules;
+#endif // WRITEAST_TO_C_191101195347
 
-public:
-    module_manager(bool do_parserTable_IO=true);
-
-    module_AST_ptr parse_module(std::string module_fname, bool reporting=false);
-};
-
-#endif

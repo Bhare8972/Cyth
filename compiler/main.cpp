@@ -16,7 +16,37 @@ limitations under the License.
 This is the entry point for the Cyth compiler
 */
 
+#include <string>
 #include "module_manager.hpp"
+#include "writeAST_to_C.hpp"
+
+using namespace std;
+
+//TODO:
+// current trying to implement blocks
+//  parser is implemented. Need to implement AST, and following stuff. Include fixing function in parrellel
+
+// add functions (include the @-thingies, before and after function name)
+    // BLOCK
+    //     nested functions
+    // parameters
+    // returns
+    //    function call as expression
+    // decorators
+    // call C functions
+    // __main__
+// auto keyword for variable declaration
+    // assignment for functions
+// add classes (include conversion operators)!
+// add binary, unary, and in-place operators (except bool)
+// add int, long, float, double built-ins  (methods should be non-virtual)
+// add bool operators and bool built-in
+// add exceptions..
+// add accses and iterator operators, and slice built-in
+// add string
+// add var?
+// add container build-ins (list, array, dict)
+// add imports from C and cyth (presently it just defines a name, and doesn't actually import anything!)
 
 int main(int argc, char *argv[])
 {
@@ -24,10 +54,20 @@ int main(int argc, char *argv[])
 
     if(argc == 2)
     {
-        std::cout<<"opening: "<<argv[1]<<std::endl;
-        cyth_module_manager.parse_module(argv[1], true);
+        string fname = argv[1];
+        cout<<"opening: "<<fname<<endl;
+        auto new_module = cyth_module_manager.parse_module(fname, false);
+
+        if(new_module)
+        {
+            cout<< "writing module: '" << fname << "' to cpp." << endl;
+            write_module_to_C(new_module, fname);
+        }
+        else
+        {
+        }
     }
 
 
-    std::cout<<"DONE!"<<std::endl;
+    cout<<"DONE!"<<endl;
 }
