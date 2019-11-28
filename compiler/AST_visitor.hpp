@@ -61,6 +61,7 @@ public:
     virtual void allImports_down(import_AST_node* ASTnode){}
     virtual void cImports_down(import_C_AST_node* ASTnode){}
 
+    virtual void block_down(block_AST_node* block){}
     virtual void funcDef_down(function_AST_node* funcDef){}
 
     virtual void varTypeRepr_down(varType_ASTrepr_node* varTypeRepr){}
@@ -90,6 +91,8 @@ public:
     virtual void allImports_up(import_AST_node* ASTnode){}
     virtual void cImports_up(import_C_AST_node* ASTnode){}
 
+
+    virtual void block_up(block_AST_node* block, std::list<AST_visitor_base*>& visitor_children){}
     virtual void funcDef_up(function_AST_node* funcDef, AST_visitor_base* stmt_child){}
 
     virtual void varTypeRepr_up(varType_ASTrepr_node* varTypeRepr){}

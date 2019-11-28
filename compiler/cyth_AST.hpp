@@ -85,29 +85,11 @@ class AST_node
 public:
     csu::location_span loc;
     sym_table_base* symbol_table;
-    bool symbol_table_verified;
+    int verification_state; // -1 means not verified yet (initial state). 0 (false) means bad. 1 (true) means good.
+    // different nodes are verified in different spots. a verification_state of 1 implies children have verification_state of 1.
 
     AST_node();
 
-    // NOTE: these need to be depreciated and replaced with visitors
-//    virtual void set_symbol_table(sym_table_base* upper_sym_table); // this sets the namespace of each AST node
-
-    //virtual bool build_symbol_table();
-    // defines names in symbol table. (names of functions, variables, new types, etc...)
-    // Sometimes requires the type of a name to be found before name can be registered, so is very iterative
-    // Run multiple times until types are defined, returns true if changes are made
-
-
-
-//    virtual bool verify_symbol_table(); //returns false if not all symbols could be defined. MAKES NO CHANGES. Could be ran from above operations
-    // needs to have ability to print WHY something can't be defined
-
-
-    /*
-    virtual void set_symbol_table(sym_table_base* upper_sym_table);
-    virtual bool build_symbol_table(); //returns if changes have been made, new terms could be defined. Includes finding type of expression
-    virtual bool verify_symbol_table(); //returns false if not all symbols could be defined. MAKES NO CHANGES
-    */
 
     virtual void apply_visitor(AST_visitor_base* visitor);
 };
@@ -115,6 +97,7 @@ public:
 
 class module_AST_node : public AST_node
 {
+    // verified in verify_symbol_table visitor (acclimate from children)
 public:
     std::list<AST_node_ptr> module_contents;
     module_sym_table top_symbol_table;
@@ -124,12 +107,6 @@ public:
     module_AST_node();
 
     void add_AST_node(AST_node_ptr new_AST_element);
-
-
-    //void set_symbol_table(csu::utf8_string name);
-    //void set_symbol_table();
-    //bool build_symbol_table();
-//    bool verify_symbol_table();
 
     void apply_visitor(AST_visitor_base* visitor);
 };
@@ -144,9 +121,6 @@ class import_AST_node : public AST_node
     csu::utf8_string import_name; // the name imported
     csu::utf8_string usage_name; // the name used in this module
 
-    import_AST_node(){}
-    virtual ~import_AST_node(){}
-
 
     virtual void set_usage_name(csu::utf8_string _usage_name)=0;
 };
@@ -156,39 +130,39 @@ class import_AST_node : public AST_node
 // try to never be in the situation that you need to actually know the name of the type of the variable you are importing...
 class import_C_AST_node : public import_AST_node
 {
+    // verified in set_symbol_table visitor
 public:
+    // these are fully defined during the define_names visitor
     varType_ptr type;
     varName_ptr variable;
     varType_ptr variable_type; // the unnamed type of the variable. This is not placed in the namespace
+    // note variable_type is actually a referance, not a definition. Though still set in define_names visitor
 
     import_C_AST_node(csu::utf8_string _import_name, csu::location_span _loc);
     void set_usage_name(csu::utf8_string _usage_name);
 
-    //void set_symbol_table(sym_table_base* upper_sym_table);
-    //bool build_symbol_table();
-//    bool verify_symbol_table();
-
     void apply_visitor(AST_visitor_base* visitor);
 };
 
-TODO: define class below
 class block_AST_node : public AST_node
 {
+    // verified in verify_symbol_table visitor (acclimate from children)
 public:
+
     std::list<AST_node_ptr> contents;
 
     block_AST_node(csu::location_span initial_loc);
 
-    void add_AST_node(AST_node_ptr new_AST_element, csu::location_span loc);
+    void add_AST_node(AST_node_ptr new_AST_element, csu::location_span _loc);
 
     void apply_visitor(AST_visitor_base* visitor);
 };
 
-
-TODO: fix function!!
 //// functions ////
 class function_AST_node : public AST_node
 {
+    // partially verified in register_overloads visitor
+    // verified in verify_symbol_table visitor (acclimate from children)
 public:
 
     csu::utf8_string name;
@@ -196,9 +170,12 @@ public:
     block_AST_ptr block_AST;
     // return type
 
-    varName_ptr funcName;
+    varName_ptr funcName; // partially set in define_names, type set in register_overloads
+    // these are set in register_overloads visitor
     DefFuncType_ptr funcType; // note: this is NOT stored in the symbol table, as it is NOT a symbol!
-    ResolvedFunction_ptr specific_overload; // note that THIS is the approprate C_name to refer to this function!
+    DefFuncType::ResolvedFunction_ptr specific_overload; // note that THIS is the approprate C_name to refer to this function!
+
+    sym_table_ptr inner_symbol_table;
 
     function_AST_node(csu::utf8_string _name, csu::location_span _loc, block_AST_ptr _block);
 //    function_AST_node(csu::utf8_string _name, csu::location_span _loc, parameter_list_ptr _parameter_list, block_AST_ptr _block_AST);
@@ -214,15 +191,13 @@ public:
 // variable types //
 class varType_ASTrepr_node : public AST_node
 {
+    // fully verified in reference_names
 public:
     csu::utf8_string name;//// NOTE: the 'name' of a type will need to be generalized away from a string
+    // fully set in reference_names visitor
     varType_ptr resolved_type;
 
     varType_ASTrepr_node(csu::utf8_string _name, csu::location_span _loc);
-
-    //void set_symbol_table(sym_table_base* upper_sym_table);
-    //bool build_symbol_table();
-//    bool verify_symbol_table();
 
     void apply_visitor(AST_visitor_base* visitor);
 };
@@ -247,6 +222,7 @@ public:
 
 class expression_statement_AST_node : public statement_AST_node
 {
+    // verified in verify_symbol_table visitor (acclimate from children)
 public:
     expression_AST_ptr expression;
     expression_statement_AST_node(expression_AST_ptr _expression);
@@ -255,10 +231,12 @@ public:
 
 class definition_statement_AST_node : public statement_AST_node
 {
+    // partially verified in define_names visitor
+    // fully verified in build_types
 public:
     varType_ASTrepr_ptr var_type;
     csu::utf8_string var_name;
-    varName_ptr variable_symbol;
+    varName_ptr variable_symbol; // set in define_names visitor. Type set in build_types visitor
 
     definition_statement_AST_node(varType_ASTrepr_ptr _var_type, csu::utf8_string _var_name, csu::location_span _loc);
 
@@ -267,12 +245,14 @@ public:
 
 class assignment_statement_AST_node : public statement_AST_node
 {
+    // partially verified in reference_names
+    // potentially verified in build_types
+
+    // verified in verify_symbol_table visitor
 public:
     csu::utf8_string var_name;
-    varName_ptr variable_symbol;
-    expression_AST_ptr expression;
-
-    csu::utf8_string operation_function_name;
+    varName_ptr variable_symbol; // set in reference_names visitor
+    expression_AST_ptr expression; // once type of variable_symbol, type compatibility will be check in build_types
 
     assignment_statement_AST_node( csu::utf8_string _var_name, expression_AST_ptr _expression, csu::location_span _loc);
 
@@ -281,9 +261,11 @@ public:
 
 class functionCall_statement_AST_node : public statement_AST_node
 {
+    // potentially verified in build_types
+    // verified in verify_symbol_table visitor
 public:
     expression_AST_ptr expression;
-    ResolvedFunction_ptr specific_overload;
+    funcCallWriter_ptr function_to_write; // set in build_types visitor
 
     functionCall_statement_AST_node( expression_AST_ptr _expression, csu::location_span _loc);
 
@@ -296,24 +278,15 @@ public:
 class expression_AST_node : public AST_node
 {
 public:
-    /*
-    enum expression_type
-    {
-        empty,
-        func_call_t,
-        int_literal_t,
-        reference_t,
-        binary_operator_t
-    };
-    expression_type type_of_expression;*/
-    varType_ptr expression_return_type;
-    bool return_type_is_unnamed; // the type that hath no name!!
+
+    varType_ptr expression_return_type; // set in build_types. all expresions must be checked there
 
     expression_AST_node();
 };
 
 class intLiteral_expression_AST_node : public expression_AST_node
 {
+    // fully verified in build_types::intLiteral_up
 public:
     csu::utf8_string literal;
 
@@ -325,6 +298,8 @@ public:
 // NOTE: need to sub-class this in future for other operations, or something
 class binOperator_expression_AST_node : public expression_AST_node
 {
+    //partial verification in build_types
+    // verified in verify_symbol_table visitor
 public:
     enum expression_type
     {
@@ -336,8 +311,6 @@ public:
     expression_AST_ptr left_operand;
     expression_AST_ptr right_operand;
 
-    csu::utf8_string operation_function_name;
-
     binOperator_expression_AST_node(expression_AST_ptr _left_operand, expression_type _type, expression_AST_ptr _right_operand);
 
 
@@ -347,32 +320,16 @@ public:
 
 class varReferance_expression_AST_node : public expression_AST_node
 {
+    // partially verified in reference_names
+    // completely verified varReferance_up
 public:
     csu::utf8_string var_name;
-    varName_ptr variable_symbol;
+    varName_ptr variable_symbol; // set in reference_names
 
     varReferance_expression_AST_node(csu::utf8_string _var_name, csu::location_span _loc);
 
     void apply_visitor(AST_visitor_base* visitor);
 };
-
-//class funcCall_expression_AST_node : public expression_AST_node
-//{
-//public:
-//    class funcCall_argument_list
-//    {
-//
-//    };
-//
-//};
-//
-//class reference_expression_AST_node : public expression_AST_node
-//{
-//
-//};
-
-
-
 
 
 

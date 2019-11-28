@@ -48,28 +48,38 @@ module_AST_ptr module_manager::parse_module(string module_fname, bool reporting)
 
     //// here we process the AST into a usable state ////
 
-    //first the symbol table
-   // module_data->set_symbol_table( module_name );
+    //first set the symbol table
     set_symbol_table set_vstr(module_data.get(), module_name);
     module_data->apply_visitor(&set_vstr);
 
+    //define all names
+    define_names define_vstr;
+    module_data->apply_visitor(&define_vstr);
 
-    for( uint i=0; i<module_data->max_symbol_loops; i++)
+    //reference all names
+    reference_names referance_vstr;
+    module_data->apply_visitor(&referance_vstr);
+
+    //register overloads
+    register_overloads overloads_vstr;
+    module_data->apply_visitor(&overloads_vstr);
+
+    // set all types
+    uint i=0;
+    for( ; i<module_data->max_symbol_loops; i++)
     {
-        build_symbol_table build_vstr;
+        build_types build_vstr;
         module_data->apply_visitor(&build_vstr);
         if( not build_vstr.changes_were_made )
         {
             break;
         }
-    }
+    } // TODO: check number of loops
+    cout<<"type checked in: "<<i<<" loops"<<endl;
 
-    //bool sym_table_good = module_data->verify_symbol_table();
-
-    verify_symbol_table verify_vstr(true);
+    verify_symbol_table verify_vstr;
     module_data->apply_visitor(&verify_vstr);
-    bool sym_table_good = module_data->symbol_table_verified;
-
+    bool sym_table_good = (module_data->verification_state == 1);
 
     if( not sym_table_good)
     {
