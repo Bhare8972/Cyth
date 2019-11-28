@@ -22,23 +22,26 @@ This is the entry point for the Cyth compiler
 
 using namespace std;
 
-//TODO:
-// current trying to implement blocks
-//  parser is implemented. Need to implement AST, and following stuff. Include fixing function in parrellel
 
-// add functions (include the @-thingies, before and after function name)
-    // BLOCK
-    //     nested functions
+
+// auto keyword for variable declaration
+    // assignment for functions
+
+// add functions
+    // nested functions
     // parameters
     // returns
     //    function call as expression
-    // decorators
     // call C functions
     // __main__
-// auto keyword for variable declaration
-    // assignment for functions
+
 // add classes (include conversion operators)!
 // add binary, unary, and in-place operators (except bool)
+
+// add imports from C and cyth (presently it just defines a name, and doesn't actually import anything!)
+     // add build system
+     // add cyth headers
+
 // add int, long, float, double built-ins  (methods should be non-virtual)
 // add bool operators and bool built-in
 // add exceptions..
@@ -46,7 +49,10 @@ using namespace std;
 // add string
 // add var?
 // add container build-ins (list, array, dict)
-// add imports from C and cyth (presently it just defines a name, and doesn't actually import anything!)
+// metaprograming
+    // decorators
+    // macros
+
 
 int main(int argc, char *argv[])
 {

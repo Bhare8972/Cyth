@@ -51,11 +51,11 @@ module_AST_ptr pass_module( parser_function_class::data_T& data )
 //    return  module_ptr;
 //}
 
-template< class T >
+template< class T, int lvl=1 >
 module_AST_ptr module_add_ASTnode( parser_function_class::data_T& data )
 {
     auto module_ptr = data[0].data<module_AST_ptr>();
-    auto node_to_add = data[1].data<T>();
+    auto node_to_add = data[lvl].data<T>();
     module_ptr->add_AST_node( node_to_add );
     return  module_ptr;
 }
@@ -144,7 +144,7 @@ function_AST_ptr make_function_AST( parser_function_class::data_T& data )
 // NEW_BLOCK_term
 block_AST_ptr make_block_AST( parser_function_class::data_T& data )
 {
-    return make_shared<block_AST_node>( data[0].loc );
+    return make_shared<block_AST_node>( data[0].loc() );
 }
 
 // BLOCKlist_nonterm, THING<T>, junk...
@@ -153,7 +153,7 @@ block_AST_ptr block_add_ASTnode( parser_function_class::data_T& data )
 {
     auto block_ptr = data[0].data<block_AST_ptr>();
     auto node_to_add = data[1].data<T>();
-    block_ptr->add_AST_node( node_to_add, data[1].loc );
+    block_ptr->add_AST_node( node_to_add, data[1].loc() );
     return  block_ptr;
 }
 
@@ -283,7 +283,9 @@ csu::token_data cython_lexer::lex_eatnewline(csu::utf8_string& data, location_sp
     utf8_string newline("\n");
     unput(newline);
 
-    dyn_holder new_data( 0 );
+    continue_lexing(true);
+
+    dyn_holder new_data( 0 );// this will get thrown away
     return token_data(STMT_id, new_data, loc);
 }
 
@@ -447,12 +449,12 @@ make_cyth_parser::make_cyth_parser(bool do_file_IO) : cyth_parser_generator("./c
     //define non-term productions//
     MODULE_nonterm->add_production({ }).set_action<module_AST_ptr>( make_module_AST );
     MODULE_nonterm->add_production({ MODULE_nonterm, STMT_term }).set_action<module_AST_ptr>( pass_module );
-    //MODULE_nonterm->add_production({ MODULE_nonterm, STATEMENT_nonterm, STMT_term }).set_action<module_AST_ptr>( module_add_statement_AST );
-    //MODULE_nonterm->add_production({ MODULE_nonterm, completeImport_nonterm, STMT_term }).set_action<module_AST_ptr>( module_add_ASTnode );
-    //MODULE_nonterm->add_production({ MODULE_nonterm, FUNC_DEF_nonterm }).set_action<module_AST_ptr>( module_add_function_AST );
+
     MODULE_nonterm->add_production({ MODULE_nonterm, FUNC_DEF_nonterm }).set_action<module_AST_ptr>( module_add_ASTnode<function_AST_ptr> );
     MODULE_nonterm->add_production({ MODULE_nonterm, completeImport_nonterm, STMT_term }).set_action<module_AST_ptr>( module_add_ASTnode<AST_node_ptr> );
+    MODULE_nonterm->add_production({ MODULE_nonterm, completeImport_nonterm, EOF_term }).set_action<module_AST_ptr>( module_add_ASTnode<AST_node_ptr> );
     MODULE_nonterm->add_production({ MODULE_nonterm, STATEMENT_nonterm, STMT_term }).set_action<module_AST_ptr>( module_add_ASTnode<statement_AST_ptr> );
+    MODULE_nonterm->add_production({ MODULE_nonterm, STATEMENT_nonterm, EOF_term }).set_action<module_AST_ptr>( module_add_ASTnode<statement_AST_ptr> );
 
     //IMPORTS
     completeImport_nonterm->add_production({ startingImport_nonterm }).set_action< AST_node_ptr >( complete_import_AST );
@@ -469,6 +471,8 @@ make_cyth_parser::make_cyth_parser(bool do_file_IO) : cyth_parser_generator("./c
 
     //General code block
     BLOCK_nonterm->add_production({ BLOCKlist_nonterm, END_BLOCK_term }) .set_action<block_AST_ptr>( pass_block );
+    BLOCK_nonterm->add_production({ BLOCKlist_nonterm, STATEMENT_nonterm, END_BLOCK_term }) .set_action<block_AST_ptr>( block_add_ASTnode<statement_AST_ptr>  );
+
     BLOCKlist_nonterm->add_production({ NEW_BLOCK_term }) .set_action<block_AST_ptr>( make_block_AST );
     BLOCKlist_nonterm->add_production({ BLOCKlist_nonterm, STATEMENT_nonterm, STMT_term }) .set_action<block_AST_ptr>( block_add_ASTnode<statement_AST_ptr> );
 

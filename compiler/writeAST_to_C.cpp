@@ -92,12 +92,14 @@ public:
 
     void funcDef_down(function_AST_node* funcDef)
     {
-        header_fout << "void " << funcDef->specific_overload->C_name << "(void);" <<endl;
+        header_fout << "void " << funcDef->specific_overload->c_reference << "(void);" <<endl;
     }
 
     void definitionStmt_down(definition_statement_AST_node* defStmt)
     {
-        header_fout << "extern " << defStmt->var_type->resolved_type->C_name << " " << defStmt->variable_symbol->C_name << ";" << endl;
+        header_fout << "extern ";
+        defStmt->var_type->resolved_type->C_definition_name( defStmt->variable_symbol->C_name, header_fout );
+        header_fout << ";" << endl;
     }
 
 
@@ -144,7 +146,7 @@ public:
     {
         source_fout << "#include \"" << header_fname << "\"" << endl;
         source_fout << endl;
-
+/*
         // these should be included from a library.
         source_fout << "#define __Ctype_add_macro__(X, Y) \\" << endl;
         source_fout << "({ typeof (X) __cy_TMP_x__ = (X); \\" << endl;
@@ -155,53 +157,128 @@ public:
         source_fout << "#define __Ctype_assignment_macro__(X, Y) \\" << endl;
         source_fout << "({ typeof (Y) __cy_TMP_y__ = (Y); \\" << endl;
         source_fout << "*X = __cy_TMP_y__; })" << endl;
-        source_fout << endl;
+        source_fout << endl;*/
 
     }
 
     void definitionStmt_down(definition_statement_AST_node* defStmt)
     {
-        // should only be run on top-level statements, which presently, is all this visitor does.
-        source_fout << defStmt->var_type->resolved_type->C_name << " " << defStmt->variable_symbol->C_name << ";" << endl;
-
-        source_fout << endl;
+        defStmt->var_type->resolved_type->C_definition_name( defStmt->variable_symbol->C_name,  source_fout  );
+        source_fout<< ";" << endl << endl;
     }
 };
 
-//
-class source_statement_visitor : public AST_visitorTree
+//Next two visitors are the work horses. they write out the expressions and statements
+
+class source_expression_visitor : public AST_visitorTree
 {
-/// write out straight-forward statements. does not write functions, classes, or those complex thingies.
+/// write out straight-forward expressions. does not write functions, classes, or those complex thingies.
+/// this should ONLY be called on expressions.
 
 public:
     ofstream& source_fout;
-    utf8_string expression_C_name;
+    utf8_string C_expression_code; // C expression code that returns the value of the cyth expression.
+    //Note that each cyth expresion may require multiple C statements. Thus each cyth expression may write to the file, and to expression_code
+    // because 'expression_code' contains code, it MUST be used by its parent
 
-    source_statement_visitor(ofstream& _source_fout) :
+    source_expression_visitor(ofstream& _source_fout) :
         source_fout(_source_fout)
     {
     }
 
     shared_ptr< AST_visitor_base > make_child(int number)
     {
+        return make_shared<source_expression_visitor>( source_fout );
+    }
+
+    void intLiteral_up(intLiteral_expression_AST_node* intLitExp)
+    {
+        stringstream exp;
+        exp << intLitExp->literal;
+        C_expression_code = exp.str();
+    }
+
+    void binOperator_up(binOperator_expression_AST_node* binOprExp, AST_visitor_base* LHS_exp_visitor, AST_visitor_base* RHS_exp_visitor)
+    {
+
+        // define addition
+        source_expression_visitor* LHS_exp_visitor_PTR = dynamic_cast<source_expression_visitor*>(LHS_exp_visitor);
+        source_expression_visitor* RHS_exp_visitor_PTR = dynamic_cast<source_expression_visitor*>(RHS_exp_visitor);
+
+        stringstream exp;
+        binOprExp->expression_return_type->write_LHSaddition( LHS_exp_visitor_PTR->C_expression_code, RHS_exp_visitor_PTR->C_expression_code, exp );
+        C_expression_code = exp.str();
+
+    }
+
+    void varReferance_up(varReferance_expression_AST_node* varRefExp)
+    {
+        C_expression_code = varRefExp->variable_symbol->C_name; // the magic of compilers!
+        C_expression_code = varRefExp->variable_symbol->C_name; // the magic of compilers!
+    }
+};
+
+class source_statement_visitor : public AST_visitorTree
+{
+/// write out straight-forward statements. does not write functions, classes, or those complex thingies.
+/// can write out single statements or block of statements
+
+public:
+    ofstream& source_fout;
+    bool do_children;
+
+    source_statement_visitor(ofstream& _source_fout) :
+        source_fout(_source_fout)
+    {
+        do_children = true;
+    }
+
+    bool apply_to_children(){ return do_children; }
+
+    shared_ptr< AST_visitor_base > make_child(int number)
+    {
         return make_shared<source_statement_visitor>( source_fout );
     }
 
+
+    //// things that cause this visitor to stop ////
+    void funcDef_down(function_AST_node* funcDef)
+    {
+        do_children = false;
+    }
+
+    //// "normal" things ////
     void statement_up(statement_AST_node* statment)
     {
         source_fout <<  endl;
     }
 
+
+    void definitionStmt_up(definition_statement_AST_node* defStmt, AST_visitor_base* varTypeRepr_child)
+    {
+        defStmt->var_type->resolved_type->C_definition_name( defStmt->variable_symbol->C_name, source_fout );
+        source_fout << ";" << endl << endl;
+    }
+
     void assignmentStmt_up(assignment_statement_AST_node* assignStmt, AST_visitor_base* expression_child)
     {
+        source_expression_visitor expr_vistr( source_fout );
+        assignStmt->expression->apply_visitor( &expr_vistr );
 
-        source_statement_visitor* expression_visitor_PTR = dynamic_cast<source_statement_visitor*>(expression_child);
-
-        source_fout << assignStmt->operation_function_name << "( &" << assignStmt->variable_symbol->C_name << "," << expression_visitor_PTR->expression_C_name << ");"<<endl;
+        assignStmt->variable_symbol->var_type->write_assignment( assignStmt->variable_symbol->C_name, expr_vistr.C_expression_code, source_fout );
+        source_fout << endl;
     }
 
     void functionCall_Stmt_up(functionCall_statement_AST_node* funcCall,  AST_visitor_base* expression_child)
     {
+        source_expression_visitor expr_vistr( source_fout );
+        funcCall->expression->apply_visitor( &expr_vistr );
+
+        funcCall->function_to_write->write_call( expr_vistr.C_expression_code, source_fout );
+        source_fout << ';' <<endl;
+
+        /*
+        // this is nonsence need to fix it!
         if( funcCall->expression->expression_return_type->needs_to_be_resolved() )
         {
              // this is a static function
@@ -210,45 +287,13 @@ public:
         else
         {
             // this is more of a function-pointer thing I think!
-            source_statement_visitor* expression_visitor_PTR = dynamic_cast<source_statement_visitor*>(expression_child);
-            source_fout << expression_visitor_PTR->expression_C_name << "();" << endl;
-        }
-    }
 
-    void intLiteral_up(intLiteral_expression_AST_node* intLitExp)
-    {
-        expression_C_name = intLitExp->symbol_table->get_unique_variable_name();
+            source_expression_visitor expr_vistr( source_fout );
+            funcCall->expression->apply_visitor( &expr_vistr );
 
-        source_fout << "typeof(" << intLitExp->literal << ") " << expression_C_name << "=" <<  intLitExp->literal << ";" << endl;
-    }
-
-    void binOperator_up(binOperator_expression_AST_node* binOprExp, AST_visitor_base* LHS_exp_visitor, AST_visitor_base* RHS_exp_visitor)
-    {
-        expression_C_name = binOprExp->symbol_table->get_unique_variable_name();
-
-        source_statement_visitor* LHS_exp_visitor_PTR = dynamic_cast<source_statement_visitor*>(LHS_exp_visitor);
-        source_statement_visitor* RHS_exp_visitor_PTR = dynamic_cast<source_statement_visitor*>(RHS_exp_visitor);
-
-        stringstream exp;
-        exp << binOprExp->operation_function_name << "(" << LHS_exp_visitor_PTR->expression_C_name << "," << RHS_exp_visitor_PTR->expression_C_name << ")";
-        string exp_str;
-        exp >> exp_str;
-
-        if( binOprExp->return_type_is_unnamed )
-        {
-            source_fout << "typeof(" << exp_str << ")";
-        }
-        else
-        {
-            source_fout << binOprExp->expression_return_type->C_name;
-        }
-
-        source_fout << " " << expression_C_name << "=" << exp_str << ";" << endl;
-    }
-
-    void varReferance_up(varReferance_expression_AST_node* varRefExp)
-    {
-        expression_C_name = varRefExp->variable_symbol->C_name; // the magic of compilers!
+            //source_statement_visitor* expression_visitor_PTR = dynamic_cast<source_statement_visitor*>(expression_child);
+            source_fout << (expr_vistr.C_expression_code) << "();" << endl;
+        }*/
     }
 
 };
@@ -263,17 +308,20 @@ class source_moduleExpresion_visitor : public AST_visitorTree
 public:
     ofstream& source_fout;
     bool do_children; //true for module (first node applied), false for next level. Lower levels not done
+    bool do_writing; // default is true. Set on way down to false if nesisary
 
     source_moduleExpresion_visitor(ofstream& _source_fout) :
         source_fout(_source_fout)
     {
         do_children = true;
+        do_writing = true;
     }
 
     source_moduleExpresion_visitor(bool _do_children, ofstream& _source_fout) :
         source_fout(_source_fout)
     {
         do_children = _do_children;
+        do_writing = true;
     }
 
     bool apply_to_children(){ return do_children; }
@@ -294,10 +342,18 @@ public:
         source_fout << "}" << endl;
     }
 
+    void definitionStmt_down(definition_statement_AST_node* defStmt)
+    {
+        do_writing = false; // DO NOT WRITE DEFS!
+    }
+
     void statement_down(statement_AST_node* statment)
     {
-        source_statement_visitor statement_writer( source_fout );
-        statment->apply_visitor( &statement_writer );
+        if(do_writing)
+        {
+            source_statement_visitor statement_writer( source_fout );
+            statment->apply_visitor( &statement_writer );
+        }
     }
 };
 
@@ -321,11 +377,11 @@ public:
 
     void funcDef_up(function_AST_node* funcDef, AST_visitor_base* stmt_child)
     {
-        source_fout << "void " << funcDef->specific_overload->C_name << "(void)" << endl;
+        source_fout << "void " << funcDef->specific_overload->c_reference << "(void)" << endl;
         source_fout << "{" << endl;
 
         source_statement_visitor statement_writer( source_fout );
-        funcDef->stmt->apply_visitor( &statement_writer );
+        funcDef->block_AST->apply_visitor( &statement_writer );
 
         source_fout << "}" << endl << endl;
     }

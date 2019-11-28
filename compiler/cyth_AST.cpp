@@ -32,7 +32,7 @@ using namespace csu;
 AST_node::AST_node()
 {
     symbol_table = 0;
-    symbol_table_verified = false;
+    verification_state = -1;
 }
 
 void AST_node::apply_visitor(AST_visitor_base* visitor)
@@ -83,19 +83,6 @@ void module_AST_node::apply_visitor(AST_visitor_base* visitor)
 }
 
 
-//////// statement block //////
-//statement_block_AST_node::statement_block_AST_node() :
-//    symbol_table( NULL )
-//{
-//
-//}
-//
-//void statement_block_AST_node::add_statement(statement_AST_ptr new_statement)
-//{
-//    ////TODO: check if is a declaration
-//    statements.push_back( new_statement );
-//}
-
 ///// IMPORTS /////
 
 //import from C
@@ -129,17 +116,56 @@ void import_C_AST_node::apply_visitor(AST_visitor_base* visitor)
     visitor->allImports_up( this );
 }
 
-///// FUNCTIONS ////
-function_AST_node::function_AST_node(utf8_string _name, location_span _loc, statement_AST_ptr _stmt)
+///// OTHERS ////
+
+// block
+block_AST_node::block_AST_node(csu::location_span initial_loc)
+{
+    loc = initial_loc;
+}
+
+void block_AST_node::add_AST_node(AST_node_ptr new_AST_element, csu::location_span _loc)
+{
+    contents.push_back( new_AST_element );
+    loc = loc + _loc;
+}
+
+void block_AST_node::apply_visitor(AST_visitor_base* visitor)
+{
+    visitor->block_down( this );
+    visitor->ASTnode_down( this );
+
+    if( not visitor->apply_to_children() ){ return; }
+    visitor->initiate_children( contents.size() );
+
+    int i = 0;
+    std::list<AST_visitor_base*> visitor_children;
+
+    for(auto child : contents)
+    {
+        AST_visitor_base* child_visitor = visitor->get_child(i) ;
+        visitor_children.push_back( child_visitor );
+        child->apply_visitor( child_visitor );
+        i += 1;
+    }
+
+    visitor->ASTnode_up( this );
+    visitor->block_up( this, visitor_children );
+}
+
+// function
+function_AST_node::function_AST_node(utf8_string _name, location_span _loc, block_AST_ptr _block)
 {
     name = _name;
     loc = _loc;
 
-    stmt = _stmt;
+    block_AST = _block;
 
     funcName = nullptr;
     funcType = nullptr;
     specific_overload = nullptr;
+
+    inner_symbol_table = nullptr;
 }
 
 void function_AST_node::apply_visitor(AST_visitor_base* visitor)
@@ -151,7 +177,7 @@ void function_AST_node::apply_visitor(AST_visitor_base* visitor)
 
     visitor->initiate_children( 1 );
     AST_visitor_base* child = visitor->get_child(0) ;
-    stmt->apply_visitor( child );
+    block_AST->apply_visitor( child );
 
     visitor->ASTnode_up( this );
     visitor->funcDef_up( this, child );
@@ -275,7 +301,7 @@ functionCall_statement_AST_node::functionCall_statement_AST_node( expression_AST
 {
     loc = _loc;
     expression = _expression;
-    specific_overload = nullptr;
+    function_to_write = nullptr;
 }
 
 void functionCall_statement_AST_node::apply_visitor(AST_visitor_base* visitor)
@@ -301,7 +327,7 @@ void functionCall_statement_AST_node::apply_visitor(AST_visitor_base* visitor)
 expression_AST_node::expression_AST_node()
 {
     expression_return_type = nullptr;
-    return_type_is_unnamed = true;
+    //return_type_is_unnamed = true;
 }
 
 // int literal
