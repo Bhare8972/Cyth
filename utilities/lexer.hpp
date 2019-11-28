@@ -62,6 +62,7 @@ class location
     bool operator>=(const location& LHS) const;
 
     location_span update(utf8_string& input); //moves the location forward by the input. Return the span between new and old positions
+    void backup(utf8_string& input); //oppisite of update. Assumes previous lines all have length zero
 };
 std::ostream& operator<<(std::ostream& os, const location& dt);
 
@@ -232,14 +233,14 @@ public:
 
     lexer( const lexer<return_type>& RHS)
     {
-        continue_lexing_b=false;
-        lexer_state=0;
-        EOF_action=RHS.EOF_action;
-        state_table=RHS.state_table;
-        actions=RHS.actions;
-        lexer_states=RHS.lexer_states;
+        continue_lexing_b = false;
+        lexer_state = 0;
+        EOF_action = RHS.EOF_action;
+        state_table = RHS.state_table;
+        actions = RHS.actions;
+        lexer_states = RHS.lexer_states;
         std::stringstream tmp;
-        input_buffer=std::shared_ptr<ring_buffer>(new ring_buffer(tmp));
+        input_buffer = std::shared_ptr<ring_buffer>(new ring_buffer(tmp));
     }
 
     virtual ~lexer() = default;
@@ -258,38 +259,39 @@ public:
     void reset()
     //reset the lexer state to keep lexing. Does not alter the location in the input source.
     {
-        lexer_state=0;
-        continue_lexing_b=false;
+        lexer_state = 0;
+        continue_lexing_b = false;
     }
 
     //functions to control buffer
     void set_input(utf8_string& file_name)
     {
         std::ifstream fin(file_name.to_cpp_string());
-        input_buffer=std::shared_ptr<ring_buffer>( new ring_buffer(fin)); //this line may need to be updated
-        loc=location();//reset location
+        input_buffer = std::shared_ptr<ring_buffer>( new ring_buffer(fin)); //this line may need to be updated
+        loc = location();//reset location
     }
 
     void set_input(const std::istream& _input)
     {
-        input_buffer=std::shared_ptr<ring_buffer>(new ring_buffer(_input));
-        loc=location();//reset location
+        input_buffer = std::shared_ptr<ring_buffer>(new ring_buffer(_input));
+        loc = location();//reset location
     }
 
     void unput(utf8_string& data)
     {
+        loc.backup(data);
         input_buffer->insert(data);
     }
 
     //lexing control functions
     void set_state(unsigned int _new_state)
     {
-        lexer_state=_new_state;
+        lexer_state = _new_state;
     }
 
     void continue_lexing(bool _cont_lex)
     {
-        continue_lexing_b=_cont_lex;
+        continue_lexing_b = _cont_lex;
     }
 
     return_type operator()()
@@ -297,11 +299,11 @@ public:
     {
         while(true)
         {
-            unsigned int initial_DFA_index=(*lexer_states)[lexer_state];
-            unsigned int DFA_state_index=0;
-            auto DFA_state=(*state_table)[DFA_state_index+initial_DFA_index];
-            unsigned int last_action_index=0;//note that this is illegitamate until has_read_accepting_state is true
-            bool has_read_accepting_state=false;
+            unsigned int initial_DFA_index = (*lexer_states)[lexer_state];
+            unsigned int DFA_state_index = 0;
+            auto DFA_state = (*state_table)[DFA_state_index+initial_DFA_index];
+            unsigned int last_action_index = 0;//note that this is illegitamate until has_read_accepting_state is true
+            bool has_read_accepting_state = false;
             while(not input_buffer->has_read_EOF)
             {
                 if(DFA_state->accepting_info != -1)
@@ -324,7 +326,7 @@ public:
                     }
                 }
 
-                int new_state=DFA_state->get_transition( next_char );
+                int new_state = DFA_state->get_transition( next_char );
                 if(new_state==-1)
                 {
                     break; //no transition
@@ -333,23 +335,23 @@ public:
                 {
                     input_buffer->read(); //read the charector.
                     DFA_state_index=new_state; //make the transition
-                    DFA_state=(*state_table)[DFA_state_index+initial_DFA_index];
+                    DFA_state = (*state_table)[DFA_state_index+initial_DFA_index];
                 }
             }
 
             if(input_buffer->has_read_EOF and DFA_state->accepting_info != -1)
             //there may be an unaccepted state if the next char is EOF
             {
-                has_read_accepting_state=true;
-                last_action_index=DFA_state->accepting_info;
+                has_read_accepting_state = true;
+                last_action_index = DFA_state->accepting_info;
             }
 
             if( has_read_accepting_state )
             {
-                continue_lexing_b=false;
-                utf8_string data=input_buffer->reset_string();
-                location_span span=loc.update(data);
-                auto ret_data=(*actions)[last_action_index](data, span, this); //control functions can be called here, and change lexer state
+                continue_lexing_b = false;
+                utf8_string data = input_buffer->reset_string();
+                location_span span = loc.update(data);
+                auto ret_data = (*actions)[last_action_index](data, span, this); //control functions can be called here, and change lexer state
                 //std::string tmp;
                 if(not continue_lexing_b)
                 {
@@ -360,7 +362,7 @@ public:
             {
                 if(input_buffer->length_read==0) //legitamate EOF
                 {
-                    continue_lexing_b=false;
+                    continue_lexing_b = false;
                     utf8_string data="";
                     location_span span=loc.update(data);
 
@@ -380,8 +382,8 @@ public:
             else
             {
                 input_buffer->read(); //nead to read the char we couldn't transition on.
-                utf8_string data=input_buffer->reset_string();
-                location_span span=loc.update(data);
+                utf8_string data = input_buffer->reset_string();
+                location_span span = loc.update(data);
                 throw lexer_exception("Could not read token (", data, ") ", span);
             }
 
@@ -458,9 +460,9 @@ public:
     //add a regex pattern, where the lexer will just eat the pattern and keep parsing.
     {
         pattern new_pattern;
-        new_pattern.regular_expression=_regular_exp;
-        new_pattern.action_number=actions->size();
-        new_pattern.state=current_state;
+        new_pattern.regular_expression = _regular_exp;
+        new_pattern.action_number = actions->size();
+        new_pattern.state = current_state;
         patterns.push_back(new_pattern);
         actions->push_back(lex_func_keep_lexing<return_type>());
     }

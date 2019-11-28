@@ -25,34 +25,53 @@ using namespace csu;
 //location
 location::location()
 {
-    line=1;
-    column=0;
+    line = 1;
+    column = 0;
 }
 
 location::location(const location& RHS)
 {
-    line=RHS.line;
-    column=RHS.column;
+    line = RHS.line;
+    column=  RHS.column;
 }
 
 location_span location::update(utf8_string& input)
 {
     location_span ret;
-    ret.start=*this;
+    ret.start = *this;
     for(auto& char_ : input)
     {
         if(char_=="\n")
         {
             line++;
-            column=0;
+            column = 0;
         }
         else
         {
             column++;
         }
     }
-    ret.end=*this;
+    ret.end = *this;
     return ret;
+}
+
+void location::backup(utf8_string& input)
+{
+
+    for( int i = input.get_length()-1; i>=0; i-- )
+    {
+        auto& char_ = input[i];
+        if(char_=="\n")
+        {
+            line--;
+            column = 0;
+        }
+        else if( column>0 )
+        {
+            column--;
+        }
+    }
+
 }
 
 location& location::operator=(const location& other)

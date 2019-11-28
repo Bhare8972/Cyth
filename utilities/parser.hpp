@@ -281,7 +281,7 @@ public:
     production& set_action(std::function<ret_type(parser_function_class::data_T&)> _func)
     {
         parser_function_ptr new_parser_func(new parser_functional<ret_type>(_func));
-        action=new_parser_func;
+        action = new_parser_func;
         return *this;
     }
 
