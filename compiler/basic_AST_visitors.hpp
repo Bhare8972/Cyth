@@ -22,23 +22,6 @@ This file defines basic visitors that act on the AST after it is built by the pa
 #include "cyth_AST.hpp"
 #include "AST_visitor.hpp"
 
-////// EXCEPTIONS ////
-//class NameNotDefined_exc : public std::exception
-//{
-//    csu::utf8_string name;
-//    csu::location_span loc;
-//
-//    std::string msg;
-//
-//public:
-//    //BeforeDefinition_exc(){}
-//    NameNotDefined_exc( csu::utf8_string& _name, csu::location_span& _loc);
-//
-//    const char* what();
-//
-//};
-
-
 // set symbol table
 class set_symbol_table : public AST_visitorTree
 {
@@ -50,16 +33,16 @@ public:
     set_symbol_table(module_AST_node* module, csu::utf8_string module_name);
     set_symbol_table(AST_visitor_base* _parent);
 
-    std::shared_ptr< AST_visitor_base > make_child(int number);
+    std::shared_ptr< AST_visitor_base > make_child(int number) override;
 
     void set_new_table(AST_node* ASTnode, csu::utf8_string& table_name);
 
     // if symbol_table is null, sets to parent if has parent
-    void ASTnode_down(AST_node* ASTnode);
+    void ASTnode_down(AST_node* ASTnode) override;
 
-
-    void funcDef_down(function_AST_node* funcDef);
-
+    void funcDef_down(function_AST_node* funcDef) override;
+    void ClassDef_down( class_AST_node* class_node) override;
+    void methodDef_down(method_AST_node* methodDef) override;
 };
 
 // defines all the names.
@@ -73,29 +56,37 @@ public:
     define_names();
     define_names(bool _at_module_level);
 
-    std::shared_ptr< AST_visitor_base > make_child(int number);
+    std::shared_ptr< AST_visitor_base > make_child(int number) override;
 
 
-    void cImports_up(import_C_AST_node* ASTnode); // completely verified here
-    void definitionStmt_up(definition_statement_AST_node* defStmt, AST_visitor_base* varTypeRepr_child);
+    void cImports_up(import_C_AST_node* ASTnode) override; // completely verified here
+    void definitionStmt_up(definition_statement_AST_node* defStmt, AST_visitor_base* varTypeRepr_child) override;
+    void autoDefStmt_up(auto_definition_statement_AST_node* autoStmt, AST_visitor_base* expression_child) override;
 
-    void funcDef_down(function_AST_node* funcDef); // need to do this BEFORE block, to define arguments
+    void funcDef_down(function_AST_node* funcDef) override; // need to do this BEFORE block, to define arguments
+    void baseParams_up(function_parameter_list::base_parameters_T* baseParams, std::list<AST_visitor_base*>& visitor_children) override;
+
+    void ClassDef_down( class_AST_node* class_node) override;
+    void ClassVarDef_down( class_varDefinition_AST_node* class_var_def ) override; // different from definitionStmt_up, since is not ordered
+
+    void methodDef_down(method_AST_node* methodDef) override; // need to do this BEFORE block, to define arguments
 };
 
 // find where names are explicitly referenced
 // throw if name is used before defined, or not defined at all
+// is this really needed? or do this in build_types? what about member accssesing?
 class reference_names : public AST_visitorTree
 {
 public:
 
-    std::shared_ptr< AST_visitor_base > make_child(int number);
+    std::shared_ptr< AST_visitor_base > make_child(int number) override;
 
+    void varTypeRepr_up(varType_ASTrepr_node* varTypeRepr) override; // completely verified here
 
-    void varTypeRepr_up(varType_ASTrepr_node* varTypeRepr); // completely verified here
+//void assignmentStmt_up(assignment_statement_AST_node* assignStmt, AST_visitor_base* expression_child) override;
+    void LHS_varRef_up(LHS_varReference* varref) override;
 
-    void assignmentStmt_up(assignment_statement_AST_node* assignStmt, AST_visitor_base* expression_child);
-
-    void varReferance_up(varReferance_expression_AST_node* varRefExp);
+    void varReferance_up(varReferance_expression_AST_node* varRefExp) override;
 };
 
 
@@ -105,13 +96,24 @@ class register_overloads : public AST_visitorTree
 public:
     bool is_module;
     bool at_module_level;
+    callableDefinition_AST_node* current_callable;
 
-    register_overloads();
-    register_overloads(bool _at_module_level);
+    register_overloads(); // called by module
+    register_overloads(bool _at_module_level, callableDefinition_AST_node* _current_callable); // else
 
-    std::shared_ptr< AST_visitor_base > make_child(int number);
+    std::shared_ptr< AST_visitor_base > make_child(int number) override;
 
-    void funcDef_down(function_AST_node* funcDef);
+    void callableDef_down(callableDefinition_AST_node* callDef) override; // sets current_callable
+    void returnStatement_down(return_statement_AST_node* returnStmt) override; // uses above info
+
+    // need to register the type of the parameters BEFORE we register the function overload...
+    void baseParams_down(function_parameter_list::base_parameters_T* baseParams) override;
+
+    void funcDef_up(function_AST_node* funcDef, AST_visitor_base* returnType_child, AST_visitor_base* paramList_child,
+                    AST_visitor_base* funcBody_child) override;
+
+    void methodDef_up(method_AST_node* methodDef, AST_visitor_base* returnType_child, AST_visitor_base* paramList_child,
+                              AST_visitor_base* methodBody_child) override;
 };
 
 // now we figure out what the type of everything is
@@ -123,63 +125,47 @@ public:
 
     build_types();
 
-    std::shared_ptr< AST_visitor_base > make_child(int number);
+    std::shared_ptr< AST_visitor_base > make_child(int number) override;
 
-    void ASTnode_up(AST_node* ASTnode); // accumulates if children have changes.
+    void ASTnode_up(AST_node* ASTnode) override; // accumulates if children have changes.
 
-    void definitionStmt_up(definition_statement_AST_node* defStmt, AST_visitor_base* varTypeRepr_child); // completely verify
-    void functionCall_Stmt_up(functionCall_statement_AST_node* funcCall, AST_visitor_base* expression_child);
-    void assignmentStmt_up(assignment_statement_AST_node* assignStmt, AST_visitor_base* expression_child);
+    void callableDef_up(callableDefinition_AST_node* callDef, AST_visitor_base* paramList_child) override;
 
-    void intLiteral_up(intLiteral_expression_AST_node* intLitExp); // fully verfied
-    void binOperator_up(binOperator_expression_AST_node* binOprExp, AST_visitor_base* LHS_exp_visitor, AST_visitor_base* RHS_exp_visitor);
-    void varReferance_up(varReferance_expression_AST_node* varRefExp); // fully verified
+    void baseArguments_up(call_argument_list::base_arguments_T* argList, std::list<AST_visitor_base*>& visitor_children) override;
+    void callArguments_up(call_argument_list* callArgs, AST_visitor_base* unArgs_child, AST_visitor_base* namedArgs) override;
+
+    void reqParams_up(function_parameter_list::required_params* reqParams, std::list<AST_visitor_base*>& visitor_children) override;
+    void defaultParams_up(function_parameter_list::defaulted_params* defParams,
+                                  std::list<AST_visitor_base*>& param_name_visitors, std::list<AST_visitor_base*>& default_exp_visitors) override;
+
+    void generic_VarDef_up(General_VarDefinition* var_def, AST_visitor_base* var_type) override;
+    void assignmentStmt_up(assignment_statement_AST_node* assignStmt, AST_visitor_base* LHS_reference_child, AST_visitor_base* expression_child) override;
+    void autoDefStmt_up(auto_definition_statement_AST_node* autoStmt, AST_visitor_base* expression_child) override;
+    void returnStatement_up(return_statement_AST_node* returnStmt, AST_visitor_base* expression_child) override;
+
+    void LHS_varRef_up(LHS_varReference* varref) override;
+    void LHS_accessor_up(LHS_accessor_AST_node* LHSaccess, AST_visitor_base* LHSref_visitor) override;
+
+    void intLiteral_up(intLiteral_expression_AST_node* intLitExp) override; // fully verfied
+    void binOperator_up(binOperator_expression_AST_node* binOprExp, AST_visitor_base* LHS_exp_visitor, AST_visitor_base* RHS_exp_visitor) override;
+    void varReferance_up(varReferance_expression_AST_node* varRefExp) override; // potentially verified
+    void ParenExpGrouping_up(ParenGrouped_expression_AST_node* parenGroupExp, AST_visitor_base* expChild_visitor) override;
+    void functionCall_Exp_up(functionCall_expression_AST_node* funcCall, AST_visitor_base* expression_child, AST_visitor_base* arguments_child) override;
+    void accessorExp_up(accessor_expression_AST_node* accessorExp, AST_visitor_base* expChild_visitor) override;
 };
-
-//// BUILD symbol table
-//// defines names in symbol table. (names of functions, variables, new types, etc...)
-//// Sometimes requires the type of a name to be found before name can be registered, so is very iterative
-//// Run multiple times until types are defined, returns true if changes are made
-//class build_symbol_table : public AST_visitorTree
-//{
-//public:
-//    bool changes_were_made;
-//    bool is_module;
-//    bool at_module_level;
-//
-//    build_symbol_table();
-//    build_symbol_table(bool _at_module_level);
-//
-//    std::shared_ptr< AST_visitor_base > make_child(int number);
-//
-//    void ASTnode_up(AST_node* ASTnode); // accumulates if children have changes.
-//
-//    // defines new names
-//    void cImports_up(import_C_AST_node* ASTnode);
-//    void definitionStmt_up(definition_statement_AST_node* defStmt, AST_visitor_base* varTypeRepr_child);
-//
-//    void funcDef_down(function_AST_node* funcDef);
-//
-//    // refers to names
-//    void varTypeRepr_up(varType_ASTrepr_node* varTypeRepr);
-//
-//    void assignmentStmt_up(assignment_statement_AST_node* assignStmt, AST_visitor_base* expression_child);
-//    void functionCall_Stmt_up(functionCall_statement_AST_node* funcCall, AST_visitor_base* expression_child);
-//
-//    void intLiteral_up(intLiteral_expression_AST_node* intLitExp);
-//    void binOperator_up(binOperator_expression_AST_node* binOprExp, AST_visitor_base* LHS_exp_visitor, AST_visitor_base* RHS_exp_visitor);
-//    void varReferance_up(varReferance_expression_AST_node* varRefExp);
-//
-//};
-
 
 
 
 // verify symbol table
-// by the time we get here the AST nodes are in three classes
+// by the time we get here the AST nodes are in four classes
 // 1) nodes that have already been verified
 // 2) nodes that need to be verified
+        // 2a need to override before if something special is needed
+        // 2b need to call fail_if_not_verified if fail on -1 state.
+            // if called in DOWN, then will not acclimate from children.
 // 3) nodes that are verified via acclimation of children
+        // this is default behavior. Can turn off by overrdign DOWN callback and set do_acclimation to false.
+        // will throw exception if child is not verified.
 class verify_symbol_table : public AST_visitorTree
 {
 public:
@@ -188,9 +174,9 @@ public:
     int verification_state; // set in ASTnode_down or ASTnode_up accordingly
 
     verify_symbol_table();
-    std::shared_ptr< AST_visitor_base > make_child(int number);
+    std::shared_ptr< AST_visitor_base > make_child(int number) override;
 
-    void ASTnode_down(AST_node* ASTnode)
+    void ASTnode_down(AST_node* ASTnode) override
     {
         if( ASTnode->verification_state!=-1 )
         {
@@ -199,23 +185,68 @@ public:
         }
     }
     // Note this is called immediatly after ASTnode_down
-    bool apply_to_children(){ return not is_verified; } // only do children if not verified
+    bool apply_to_children() override
+        { return not is_verified; } // only do children if not verified
 
     // acclimate children unless (do_acclimation has been set to false) or is_verified.
-    void ASTnode_up(AST_node* ASTnode);
+    void ASTnode_up(AST_node* ASTnode) override;
 
 
-    void fail_if_not_verified( AST_node* ASTnode )
+    void fail_if_not_verified( AST_node* ASTnode, std::string name )
     {
         if( ASTnode->verification_state == -1 )
         {
+            std::cout << "could not verify type info in " << name <<" " << ASTnode->loc << std::endl;
+            std::cout << "   perhaps more type-iterations are needed" << std::endl;
             ASTnode->verification_state = 0;
         }
     }
 
-    void assignmentStmt_down(assignment_statement_AST_node* assignStmt){ fail_if_not_verified(assignStmt); }
-    void functionCall_Stmt_down(functionCall_statement_AST_node* funcCall){ fail_if_not_verified(funcCall); }
-    void binOperator_down(binOperator_expression_AST_node* binOprExp){ fail_if_not_verified(binOprExp); }
+    void baseParams_down(function_parameter_list::base_parameters_T* baseParams) override
+        { fail_if_not_verified(baseParams, "function parameters"); }
+
+    void baseArguments_down(call_argument_list::base_arguments_T* argList) override
+        { fail_if_not_verified(argList, "call argument list"); }
+
+    void callArguments_down(call_argument_list* callArgs) override
+        { fail_if_not_verified(callArgs, "call arguments"); }
+
+
+
+    void returnStatement_down(return_statement_AST_node* returnStmt) override
+        { fail_if_not_verified(returnStmt, "return"); }
+
+    void assignmentStmt_down(assignment_statement_AST_node* assignStmt) override
+        { fail_if_not_verified(assignStmt, "assignment"); }
+
+    void binOperator_down(binOperator_expression_AST_node* binOprExp) override
+        { fail_if_not_verified(binOprExp, "binary expression"); }
+
+    void autoDefStmt_down(auto_definition_statement_AST_node* autoStmt) override
+        { fail_if_not_verified(autoStmt, "auto statement"); }
+
+
+    void LHS_varRef_up(LHS_varReference* varref) override
+        { fail_if_not_verified(varref, "LHS variable reference"); }
+
+    void LHS_accessor_up(LHS_accessor_AST_node* LHSaccess, AST_visitor_base* LHSref_visitor) override
+        { fail_if_not_verified(LHSaccess, "LHS member access"); }
+
+
+    void varReferance_up(varReferance_expression_AST_node* varRefExp) override
+        { fail_if_not_verified(varRefExp, "variable reference expression"); }
+
+    void generic_VarDef_down(General_VarDefinition* vardef) override
+        { fail_if_not_verified(vardef, "variable definition"); }
+
+    void ParenExpGrouping_down(ParenGrouped_expression_AST_node* parenGroupExp) override
+        { fail_if_not_verified(parenGroupExp, "parenthetical group"); }
+
+    void functionCall_Exp_down(functionCall_expression_AST_node* funcCall) override
+        { fail_if_not_verified(funcCall, "function call"); }
+
+    void accessorExp_down(accessor_expression_AST_node* accessorExp) override
+        { fail_if_not_verified(accessorExp, "member access"); }
 };
 
 #endif // BASIC_AST_VISITORS_191110152455

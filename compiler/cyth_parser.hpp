@@ -30,6 +30,7 @@ private:
     int STMT_id;
     int NEW_BLOCK_id;
     int END_BLOCK_id;
+    int EOF_id;
 
     std::list<long> block_lengths;
     bool expecting_block;
@@ -38,12 +39,13 @@ public:
     cython_lexer(lex_func_t _EOF_action, std::shared_ptr< std::vector< std::shared_ptr<csu::DFA_state> > > _state_table,
                 std::shared_ptr< std::vector< lex_func_t > > _actions, std::shared_ptr< std::vector< unsigned int> > _lexer_states);
 
-    void set_identifiers(int _STMT_id, int _NEW_BLOCK_id, int _END_BLOCK_id);
+    void set_identifiers(int _STMT_id, int _NEW_BLOCK_id, int _END_BLOCK_id, int _EOF_id);
 
     void expect_block();
 
     csu::token_data lex_eatnewline(csu::utf8_string& data, csu::location_span& loc);
     csu::token_data lex_newline(csu::utf8_string& data, csu::location_span& loc);
+    csu::token_data lex_EOF( csu::location_span& loc );
 };
 
 //need to make this a global. No idea how not too.
@@ -56,6 +58,7 @@ private:
     int STMT_id;
     int NEW_BLOCK_id;
     int END_BLOCK_id;
+    int EOF_id;
 
 public:
     make_cyth_parser(bool do_file_IO=true);

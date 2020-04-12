@@ -23,35 +23,48 @@ This is the entry point for the Cyth compiler
 using namespace std;
 
 
+//ADDING CLASSES
+// then methods
+//    now implementing self. First need to add in C-pointer ref type
+//      func def now has self
+//      need to add to function calling
+//      first fix function_call_writer for default, then fix overloads
+//      finally fix source_expression_visitor::functionCall_Exp_up to do the write thing
 
-// auto keyword for variable declaration
-    // assignment for functions
 
-// add functions
-    // nested functions
-    // parameters
-    // returns
-    //    function call as expression
-    // call C functions
-    // __main__
+// fix lexor to use quotations. Fix for strings
+
+// improve C variable naming
+// fix csu::dynamic cast exception
+// loc needs name of file
+
+
 
 // add classes (include conversion operators)!
-// add binary, unary, and in-place operators (except bool)
+// exceptions?
+// add binary, unary, and in-place operators (including numerics and bool)
+
+// add int, long, float, double, and bool
 
 // add imports from C and cyth (presently it just defines a name, and doesn't actually import anything!)
      // add build system
      // add cyth headers
 
-// add int, long, float, double built-ins  (methods should be non-virtual)
-// add bool operators and bool built-in
-// add exceptions..
+// if, while and for loops
+
 // add accses and iterator operators, and slice built-in
 // add string
 // add var?
+// add concepts
+// add iterators and iter-loops
 // add container build-ins (list, array, dict)
+// add var references (copy to dynamic variable when goes out of scope?)
+// add nested functions and classes
+    // requires closure. Perhaps when a closured static variable goes out-of-scope, it is copied to a dynamic variable?
 // metaprograming
-    // decorators
     // macros
+    // decorators
+
 
 
 int main(int argc, char *argv[])

@@ -47,7 +47,6 @@ module_AST_ptr module_manager::parse_module(string module_fname, bool reporting)
     module_AST_ptr module_data = *module_output.cast<module_AST_ptr>();
 
     //// here we process the AST into a usable state ////
-
     //first set the symbol table
     set_symbol_table set_vstr(module_data.get(), module_name);
     module_data->apply_visitor(&set_vstr);
@@ -75,7 +74,7 @@ module_AST_ptr module_manager::parse_module(string module_fname, bool reporting)
             break;
         }
     } // TODO: check number of loops
-    cout<<"type checked in: "<<i<<" loops"<<endl;
+    cout<<"type built in: "<<i<<" loops"<<endl;
 
     verify_symbol_table verify_vstr;
     module_data->apply_visitor(&verify_vstr);
@@ -85,6 +84,14 @@ module_AST_ptr module_manager::parse_module(string module_fname, bool reporting)
     {
         cout << "ERROR: module '" << module_fname << "' symbols could not be defined." << endl;
         module_data = nullptr;
+    }
+    else
+    {
+        module_data->find_main_func();
+        if( module_data->main_status == -1 )
+        {
+            module_data = nullptr;
+        }
     }
 
     parsed_modules.insert( make_pair(module_name, module_data) );
