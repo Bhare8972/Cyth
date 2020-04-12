@@ -173,6 +173,7 @@ public:
     //modifiers
     utf8_string& operator+= (const std::string& str);
     utf8_string& operator+= (const utf8_string& data);
+    utf8_string& operator+= (const char* data);
 
     void append(const std::string& str);
     void append(const char* str);

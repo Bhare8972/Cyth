@@ -647,18 +647,18 @@ parser_action parser_state::get_action(unsigned int non_term)
 //parser_generator
 parser_generator::parser_generator(utf8_string _parser_table_file_name, utf8_string _lexer_table_file_name)
 {
-    parser_table_file_name=_parser_table_file_name;
-    parser_table_generated=false;
+    parser_table_file_name =_parser_table_file_name;
+    parser_table_generated = false;
 
     lex_gen=std::shared_ptr<lexer_generator<token_data> >(new lexer_generator<token_data> (_lexer_table_file_name) );
 
     ERROR_terminal=terminal_ptr(new terminal("ERROR", error_token_id, lex_gen.get()));
     next_token_num=error_token_id+1;
-    terminals["ERROR"]=ERROR_terminal;
+    terminals["ERROR"] = ERROR_terminal;
 
     EOF_terminal=terminal_ptr(new terminal("EOF", next_token_num, lex_gen.get()));
     next_token_num++;
-    terminals["EOF"]=EOF_terminal;
+    terminals["EOF"] = EOF_terminal;
 
     lex_gen->set_EOF_action(lexer_function_generic(EOF_terminal->token_ID, true));
 }
@@ -682,11 +682,11 @@ terminal_ptr parser_generator::new_terminal(utf8_string name)
 {
     if(terminals.find(name)!=terminals.end())
     {
-        throw gen_exception("cannot make a new terminal with the same name as anouther terminal");
+        throw gen_exception("cannot make a new terminal with the same name as another terminal: ", name);
     }
     if(non_terminals.find(name)!=non_terminals.end())
     {
-        throw gen_exception("cannot make a new terminal with the same name as a non-terminal");
+        throw gen_exception("cannot make a new terminal with the same name as a non-terminal: ", name);
     }
 
     terminal_ptr new_term(new terminal(name, next_token_num, lex_gen.get()));
@@ -699,11 +699,11 @@ non_terminal_ptr parser_generator::new_nonterminal(utf8_string name)
 {
     if(terminals.find(name)!=terminals.end())
     {
-        throw gen_exception("cannot make a new non-terminal with the same name as a terminal");
+        throw gen_exception("cannot make a new non-terminal with the same name as a terminal: ", name);
     }
     if(non_terminals.find(name)!=non_terminals.end())
     {
-        throw gen_exception("cannot make a new non-terminal with the same name as anouther non-terminal");
+        throw gen_exception("cannot make a new non-terminal with the same name as another non-terminal: ", name);
     }
 
     non_terminal_ptr new_nonterm(new non_terminal(name, next_token_num, this));

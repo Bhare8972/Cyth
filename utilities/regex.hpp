@@ -56,10 +56,12 @@ functionally useful, particularly for use in defining lexers.
 //      can have multiple charectors in beginning of class. 'Beginning' ends when there is a charector that is not a 'beginning of class' charector.
 //      any other charector can be matched.
 //      ranges can be matched by placing one charector - anouther.  EG: 1-6 matches numbers 1-6 (include 1 and 6)
+//      a ^ at beginning of class means class matches everything but what is inside.
+//           ^ can still be matched if it is not at beginning of class
+//           not fully tested
+
 // unimplimented, but desired, features:
 //      use \uxxxxx, where x are lowercase hexadecimal digits, to match unicode chars. Also in strings and classes
-//      a ^ at beginning of class means class matches everything but what is inside. (not presently functional)
-//           ^ can still be matched if it is not at beginning of class
 //      the { and } charectors are used to denote a number of repeats
 //      regex functions-ish
 
@@ -160,7 +162,7 @@ public:
     std::list<code_point> initial_points;
     std::list<code_point> final_points;
 
-    multi_span( const std::list<code_point>& _initial_points, const std::list<code_point>& _final_points);
+    multi_span( const std::list<code_point>& _initial_points, const std::list<code_point>& _final_points, bool invert=false);
 
     multi_span(const std::list<code_point>& _points);
 

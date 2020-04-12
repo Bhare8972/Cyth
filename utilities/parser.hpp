@@ -510,6 +510,11 @@ public:
             }
         }
 
+        if( not parser_table_generated )
+        {
+            return nullptr; // maybe should throw error or try to recover?
+        }
+
         std::shared_ptr<lexertype> new_lex = lex_gen->get_lexer<lexertype>(do_file_IO);
         auto new_lex2 = std::static_pointer_cast< lexer<token_data> >( new_lex );
         return std::make_shared< parser >(new_lex2, term_map, production_information, state_table);
