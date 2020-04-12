@@ -658,6 +658,12 @@ utf8_string& utf8_string::operator+= (const utf8_string& data)
     return *this;
 }
 
+utf8_string& utf8_string::operator+= (const char* data)
+{
+    append(data);
+    return *this;
+}
+
 void utf8_string::append(const std::string& str)
 {
     utf8_string data(str);

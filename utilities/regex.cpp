@@ -21,6 +21,7 @@ functionally usefull, particularly for use in defining lexers.
 
 #include "regex.hpp"
 #include <iterator>
+#include <algorithm>
 using namespace std;
 using namespace csu;
 
@@ -253,10 +254,71 @@ void csu::increment_states(list< shared_ptr<NFA_state> >& states, uint incre)
 }
 
 //multi_span
-multi_span::multi_span( const std::list<code_point>& _initial_points, const std::list<code_point>& _final_points)
+multi_span::multi_span( const std::list<code_point>& _initial_points, const std::list<code_point>& _final_points, bool invert)
 {
-    initial_points=_initial_points;
-    final_points=_final_points;
+    initial_points = _initial_points;
+    final_points = _final_points;
+
+    if(invert and (initial_points.size()!=0) )
+    {
+        /// first, make simple comparable object
+        class span
+        {
+        public:
+            code_point A;
+            code_point B;
+
+            bool operator<(const span& rhs) { return A < rhs.A; }
+        };
+
+        vector<span> span_vct;
+        span_vct.reserve( initial_points.size() );
+
+        auto initial_iter = initial_points.begin();
+        auto final_iter = final_points.begin();
+        for(int i=0; i<initial_points.size(); ++i)
+        {
+            span new_span;
+            new_span.A = *initial_iter;
+            new_span.B = *final_iter;
+
+            span_vct.push_back( new_span );
+
+            ++initial_iter;
+            ++final_iter;
+        }
+
+        /// now we sort the vector
+        sort( span_vct.begin(), span_vct.end() );
+
+        /// now we create new inverted spans
+        std::list<code_point> new_initial_points;
+        std::list<code_point> new_final_points;
+        code_point current_start( 0x000000 );
+        for( auto current_span : span_vct )
+        {
+            if( current_start < current_span.A ) // start is before current span, we are good!
+            {
+                // we have a span
+                code_point current_end( current_span.A.to_UTF32()-1 );
+                new_initial_points.push_back( current_start );
+                new_final_points.push_back( current_end );
+
+                current_start = code_point( current_span.B.to_UTF32()+1 );
+            }
+            else if( (current_start < current_span.B) or (current_start == current_span.B) ) // start is in current span, move to end
+            {
+                current_start = code_point( current_span.B.to_UTF32()+1 );
+            }
+            //else // start is after current span, ignore
+        }
+
+        new_initial_points.push_back( current_start );
+        new_final_points.push_back( code_point(0x1FFFFF) );
+
+        initial_points = new_initial_points;
+        final_points = new_final_points;
+    }
 }
 
 multi_span::multi_span(const std::list<code_point>& _points)
@@ -594,7 +656,8 @@ shared_ptr<regex_node> csu::parse_class(const utf8_string& regex, uint& position
     //else
 
     //check charectors at beginning
-    bool in_beginning=true;
+    bool in_beginning = true;
+    bool do_invert = false;
     while(in_beginning)
     {
         in_beginning=false;
@@ -602,17 +665,23 @@ shared_ptr<regex_node> csu::parse_class(const utf8_string& regex, uint& position
         {
             span_begin.push_back(regex[position]);
             span_end.push_back(regex[position]);
-            position+=1;
-            in_beginning=true;
+            position += 1;
+            in_beginning = true;
         }
         else if(regex[position]=="#")//special span
         {
-            auto A=code_point(0xC0);
-            auto B=code_point(0x1FFFFF);
+            auto A = code_point(0xC0);
+            auto B = code_point(0x1FFFFF);
             span_begin.push_back( A );
             span_end.push_back( B );
-            position+=1;
-            in_beginning=true;
+            position += 1;
+            in_beginning = true;
+        }
+        else if(regex[position]=="^") // invert span!
+        {
+            do_invert = true;
+            position += 1;
+            in_beginning = true;
         }
     }
 
@@ -623,8 +692,7 @@ shared_ptr<regex_node> csu::parse_class(const utf8_string& regex, uint& position
         //check end
         if(regex[position]=="]")
         {
-            //need to do invert here
-            return shared_ptr<regex_node>(new multi_span(span_begin, span_end));
+            return shared_ptr<regex_node>(new multi_span(span_begin, span_end, do_invert));
         }
 
         //check range
@@ -644,7 +712,39 @@ shared_ptr<regex_node> csu::parse_class(const utf8_string& regex, uint& position
                 throw gen_exception("REGEX ERROR: range start is after range end in class");
             }
         }
-
+        else if(regex[position]=="\\")//escape char
+        {
+            position+=1;
+            if(position==regex.get_length())
+            {
+                throw gen_exception("REGEX ERROR: escape character at end of string");
+            }
+//            else if( regex[position]=="\"" )
+//            {
+//                shared_ptr<regex_node> new_node(new multi_span(code_point(0x0022)));
+//                chars.push_back(new_node);
+//            }
+            else if(regex[position]=="\\")
+            {
+                span_begin.push_back( code_point(0x005C) );
+                span_end.push_back( code_point(0x005C) );
+            }
+            else if(regex[position]=="n")
+            {
+                span_begin.push_back( code_point(0x000A) );
+                span_end.push_back( code_point(0x000A) );
+            }
+//            else if(regex[position]=="t")
+//            {
+//                shared_ptr<regex_node> new_node(new multi_span(code_point(0x0009)));
+//                chars.push_back(new_node);
+//            }
+            else
+            {
+                throw gen_exception("REGEX ERROR: unrecognized escape character in character class");
+            }
+            position+=1;
+        }
         //everything else
         else
         {
