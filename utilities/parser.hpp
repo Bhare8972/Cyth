@@ -173,8 +173,8 @@ public:
 class token
 //represents a token in our languege. Is either a terminal or a non-terminal token
 {
-private:
-    friend std::ostream& operator<<(std::ostream& os, const token& dt);
+//private:
+  //  friend
 
 
 
@@ -189,6 +189,7 @@ public:
 
     //extra constructors are not needed, as mostly derived classes will be used
 };
+std::ostream& operator<<(std::ostream& os, const token& dt);
 typedef std::shared_ptr<token> token_ptr;
 
 class terminal : public token
@@ -257,7 +258,7 @@ class production
 //represents a production, that could produce a non-terminal
 {
 private:
-    friend std::ostream& operator<<(std::ostream& os, const production& dt);
+    //friend std::ostream& operator<<(std::ostream& os, const production& dt);
     static unsigned int next_production_ID;
     static unsigned int next_precedence_level;
 public:
@@ -297,12 +298,13 @@ public:
     bool is_left_associative();
     bool is_right_associative();
 };
+std::ostream& operator<<(std::ostream& os, const production& dt);
 
 
 class production_info
 //contains data about a production. Used by parser for reporting info
 {
-    friend std::ostream& operator<<(std::ostream& os, const production_info& dt);
+    //friend std::ostream& operator<<(std::ostream& os, const production_info& dt);
 public:
     unsigned int L_val_ID;
     utf8_string L_val_name;
@@ -311,13 +313,14 @@ public:
 
     production_info(unsigned int _L_val_ID, utf8_string& _L_val_name, unsigned int _num_tokens, parser_function_ptr _action);
 };
+std::ostream& operator<<(std::ostream& os, const production_info& dt);
 typedef std::shared_ptr<production_info> production_info_ptr;
 
 ///// items /////
 class item
 {
-    friend std::ostream& operator<<(std::ostream& os, const item& dt);
-    friend bool operator<(const item &LHS, const item &RHS);
+   // friend std::ostream& operator<<(std::ostream& os, const item& dt);
+   // friend bool operator<(const item &LHS, const item &RHS);
 public:
     std::shared_ptr<production> prod;
     unsigned int loc;
@@ -338,10 +341,13 @@ public:
     bool operator==(const item& RHS) const;
 
 };
+std::ostream& operator<<(std::ostream& os, const item& dt);
+bool operator<(const item &LHS, const item &RHS);
+
 
 class item_set
 {
-    friend std::ostream& operator<<(std::ostream& os, const item_set& dt);
+    //friend std::ostream& operator<<(std::ostream& os, const item_set& dt);
 public:
     typedef std::list<item>::iterator iterator;
 
@@ -364,6 +370,7 @@ public:
     iterator begin();
     iterator end();
 };
+std::ostream& operator<<(std::ostream& os, const item_set& dt);
 typedef std::shared_ptr<item_set> item_set_ptr;
 
 class propagation_table
@@ -395,7 +402,7 @@ public:
 ///// parser_state /////
 class parser_action
 {
-    friend std::ostream& operator<<(std::ostream& os, const parser_action& dt);
+    //friend std::ostream& operator<<(std::ostream& os, const parser_action& dt);
 private:
     enum action_type
     {
@@ -434,6 +441,7 @@ public:
     void binary_write(std::ostream& output);
     void binary_read(std::istream& input);
 };
+std::ostream& operator<<(std::ostream& os, const parser_action& dt);
 
 class parser_state
 {
@@ -568,8 +576,8 @@ public:
     dyn_holder parse(bool reporting=false);
     dyn_holder get_data();
 
-    void reset_input(utf8_string& file_name);
-    void reset_input(const std::istream& _input);
+    //void reset_input(utf8_string& file_name);
+    void reset_input(std::istream& _input);
     void reset();
 
 };
