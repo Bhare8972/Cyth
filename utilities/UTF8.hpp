@@ -37,8 +37,8 @@ class code_point
 {
 private:
     uint8_t* code_units;
-
 public:
+
     friend std::ostream& operator<<(std::ostream& os, const code_point& dt);
     friend std::istream& operator>>(std::istream& is, code_point& dt);
     friend bool operator<(const code_point& lhs, const code_point& rhs);
@@ -111,8 +111,8 @@ class utf8_string
 //a string class that implements UTF-8
 {
 private:
-    uint8_t length;
-    uint8_t capacity;
+    size_t length;
+    size_t capacity;
     code_point* points;
 
     friend std::ostream& operator<<(std::ostream& os, const utf8_string& dt);
@@ -126,7 +126,7 @@ public:
     //constructors
     utf8_string(const utf8_string& RHS);
 
-    utf8_string(uint8_t _capacity=0);
+    utf8_string(size_t _capacity=0);
 
     utf8_string(const std::string& input);
 
@@ -144,21 +144,21 @@ public:
     //return a utf-8 cpp string with the same content as this string
 
     //size operations
-    uint8_t get_capacity();
+    size_t get_capacity();
 
-    uint get_length() const;
+    size_t get_length() const;
 
-    void resize(uint8_t _capacity);
+    void resize(size_t _capacity);
     //resizes string to _max_length. Discarding points if _max_length is smaller than current length
 
-    void reserve(uint8_t _capacity);
+    void reserve(size_t _capacity);
     //resizes string to at least_max_length.
 
     //element acsses
     code_point& operator[] (size_t pos);
     //accsess code_point at pos. Throws gen_exception if pos is beyond length of string
 
-    utf8_string slice(uint8_t start, uint8_t stop);
+    utf8_string slice(size_t start, size_t stop);
     //returns a UTF8 string with codepoints between start and stop, include start. Throws gen_exception if stop is less than start
     // or stop is larger than string
 

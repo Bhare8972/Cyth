@@ -45,6 +45,17 @@ module_AST_ptr module_add_ASTnode( parser_function_class::data_T& data )
     return  module_ptr;
 }
 
+//MODULE_nonterm, COMPILERCOMMAND_term, STMT_term
+module_AST_ptr module_add_CompilerCommand( parser_function_class::data_T& data )
+{
+    auto loc = data[0].loc();
+    auto module_ptr = data[0].data<module_AST_ptr>();
+    auto command = data[1].data<utf8_string>();
+    loc = loc + data[2].loc();
+
+    module_ptr->add_CompilerCommand( command, loc );
+    return  module_ptr;
+}
 
 
 
@@ -84,8 +95,17 @@ import_AST_ptr startingFrom_Cimport_AST( parser_function_class::data_T& data )
     return make_shared<import_C_AST_node>( file_name, import_name, loc );
 }
 
+//FROM_keyword, STRING_term, IMPORT_keyword, IDENTIFIER_term
+import_AST_ptr startingFrom_Import_AST( parser_function_class::data_T& data )
+{
+    auto loc = data[0].loc();
+    auto file_name = data[1].data<utf8_string>();
+    file_name = file_name.slice(1, file_name.get_length()-1);
+    auto import_name = data[3].data<utf8_string>();
+    loc = loc + data[3].loc();
 
-
+    return make_shared<import_cyth_AST_node>( file_name, import_name, loc );
+}
 
 
 
@@ -109,7 +129,26 @@ class_AST_ptr make_class_AST( parser_function_class::data_T& data )
     auto name = data[1].data<utf8_string>();
     loc = loc + data[2].loc();
 
-    return make_shared<class_AST_node>(name, loc);
+    auto emptyInheritanceList = make_shared<inheritanceList_AST_node>();
+    emptyInheritanceList->loc = data[0].loc();
+
+    return make_shared<class_AST_node>(name, emptyInheritanceList, loc);
+}
+
+//CLASS_keyword, IDENTIFIER_term, LPAREN_symbol, INHERITANCE_LIST_nonterm, RPAREN_symbol, NEW_BLOCK_term
+class_AST_ptr make_classInheritance_AST( parser_function_class::data_T& data )
+{
+    auto loc = data[0].loc();
+    auto name = data[1].data<utf8_string>();
+    auto inhertance = data[3].data<inheritanceList_AST_ptr>();
+    loc = loc + data[5].loc();
+
+    if( inhertance->class_IDs.size() == 0 )
+    {
+        inhertance->loc = data[0].loc();
+    }
+
+    return make_shared<class_AST_node>(name, inhertance, loc);
 }
 
 //CLASS_BLOCK_nonterm, END_BLOCK_term
@@ -140,8 +179,71 @@ class_AST_ptr ClassBlock_add_Method( parser_function_class::data_T& data )
 }
 
 
+// construct blocks!
 
+// CONSTRUCT_keyword, NEW_BLOCK_term
+construct_AST_ptr make_construct_AST ( parser_function_class::data_T& data )
+{
+    auto LOC = data[0].loc() + data[1].loc();
+    return make_shared<construct_AST_node>( LOC );
+}
 
+//CONSTRUCT_LIST_nonterm, END_BLOCK_term
+construct_AST_ptr pass_construct( parser_function_class::data_T& data )
+{
+    return  data[0].data<construct_AST_ptr>();
+}
+
+//CONSTRUCT_LIST_nonterm, CONSTRUCT_ELEMENT_nonterm, END_BLOCK_term
+//CONSTRUCT_LIST_nonterm, CONSTRUCT_ELEMENT_nonterm, STMT_term
+construct_AST_ptr construct_add( parser_function_class::data_T& data )
+{
+    auto block_ptr = data[0].data<construct_AST_ptr>();
+    auto element_to_add = data[1].data<constructElement_AST_ptr>();
+    block_ptr->add( element_to_add );
+    return  block_ptr;
+}
+
+//EXPRESSION_nonterm, CALL_ARGUMENTS_nonterm
+constructElement_AST_ptr  make_constructElement_AST( parser_function_class::data_T& data )
+{
+    auto LOC = data[0].loc();
+    auto expr = data[0].data<expression_AST_ptr>();
+    auto argument_list = data[1].data<argumentList_AST_ptr>();
+    LOC = LOC + data[1].loc();
+
+    return make_shared<constructElement_AST_node>( expr, argument_list, LOC );
+}
+
+// inheritance list
+inheritanceList_AST_ptr make_inheritanceList_AST( parser_function_class::data_T& data )
+{
+    return make_shared<inheritanceList_AST_node>();
+}
+
+//IDENTIFIER_term
+inheritanceList_AST_ptr make_inheritanceList_Item_AST( parser_function_class::data_T& data )
+{
+    auto LOC = data[0].loc();
+    auto id = data[0].data<utf8_string>();
+
+    auto new_list = make_shared<inheritanceList_AST_node>();
+    new_list->add_item(id, LOC);
+
+    return new_list;
+}
+
+//INHERITANCE_LIST_nonterm, COMMA_symbol, IDENTIFIER_term
+inheritanceList_AST_ptr inheritanceList_addItem( parser_function_class::data_T& data )
+{
+    auto inheritanceList = data[0].data<inheritanceList_AST_ptr>();
+    auto id = data[2].data<utf8_string>();
+    auto LOC = data[2].loc();
+
+    inheritanceList->add_item(id, LOC);
+
+    return inheritanceList;
+}
 
 
 /// function definition ///
@@ -542,6 +644,19 @@ statement_AST_ptr make_statement_definition_AST ( parser_function_class::data_T&
     return static_pointer_cast<statement_AST_node>( new_statement );
 }
 
+//TYPENAME_nonterm, IDENTIFIER_term, CALL_ARGUMENTS_nonterm
+statement_AST_ptr make_statement_definitionNconstruction_AST( parser_function_class::data_T& data )
+{
+    auto var_type = data[0].data<varType_ASTrepr_ptr>();
+    auto loc = data[0].loc();
+    auto var_name = data[1].data<utf8_string>();
+    auto arguments = data[2].data<argumentList_AST_ptr>();
+    loc = loc + data[2].loc();
+
+    auto new_statement =  make_shared<definitionNconstruction_statement_AST_node>( var_type, var_name, arguments, loc );
+    return static_pointer_cast<statement_AST_node>( new_statement );
+}
+
 //LHS_REFERENCE_nonterm, EQUALS_symbol, EXPRESSION_nonterm
 statement_AST_ptr make_statement_assignment_AST ( parser_function_class::data_T& data )
 {
@@ -806,6 +921,7 @@ make_cyth_parser::make_cyth_parser(bool do_file_IO) : cyth_parser_generator("./c
     auto AUTO_keyword = cyth_parser_generator.new_terminal("auto");
     auto RETURN_keyword = cyth_parser_generator.new_terminal("return");
     auto CLASS_keyword = cyth_parser_generator.new_terminal("class");
+    auto CONSTRUCT_keyword = cyth_parser_generator.new_terminal("construct");
 
     //symbols
     auto PLUS_symbol = cyth_parser_generator.new_terminal("+");
@@ -821,6 +937,7 @@ make_cyth_parser::make_cyth_parser(bool do_file_IO) : cyth_parser_generator("./c
     auto INT_term = cyth_parser_generator.new_terminal("integer");
     auto STRING_term = cyth_parser_generator.new_terminal("string");
     auto IDENTIFIER_term = cyth_parser_generator.new_terminal("identifier");
+    auto COMPILERCOMMAND_term = cyth_parser_generator.new_terminal("compiler_command");
     //auto FILENAME_term = cyth_parser_generator.new_terminal("file_name");
 
 
@@ -835,6 +952,7 @@ make_cyth_parser::make_cyth_parser(bool do_file_IO) : cyth_parser_generator("./c
     RETURN_keyword->add_pattern("return");
     CLASS_keyword->add_pattern<utf8_string>("class", LEX_make_expect_block );
     DEF_keyword->add_pattern<utf8_string>("def", LEX_make_expect_block );
+    CONSTRUCT_keyword->add_pattern<utf8_string>("construct", LEX_make_expect_block );
 
     PLUS_symbol->add_pattern("[+]");
     EQUALS_symbol->add_pattern("=");
@@ -848,7 +966,9 @@ make_cyth_parser::make_cyth_parser(bool do_file_IO) : cyth_parser_generator("./c
     INT_term->add_pattern("[0-9]+");
     IDENTIFIER_term->add_pattern("[# _ a-z A-Z]+[# _ 0-9 a-z A-Z]*");
     //FILENAME_term->add_pattern("[# _ a-z A-Z 0-9 . \\\\ ]+");
-    STRING_term->add_pattern(" < [# _ a-z A-Z 0-9 . \\\\ ]+  > "); // not correct. Fijn for now
+    STRING_term->add_pattern(" < [# _ a-z A-Z 0-9 . \\\\ /]+  > "); // not correct. Fijn for now
+
+    COMPILERCOMMAND_term->add_pattern("!!! [^ \\n]*");
 
 
 
@@ -874,10 +994,17 @@ make_cyth_parser::make_cyth_parser(bool do_file_IO) : cyth_parser_generator("./c
     auto NAMED_ARGUMENTS_nonterm = cyth_parser_generator.new_nonterminal("named_argument_list");
 
     // CLASSES
+    auto INHERITANCE_LIST_nonterm = cyth_parser_generator.new_nonterminal("inheritance_list");
     auto CLASS_DEF_nonterm = cyth_parser_generator.new_nonterminal("class_definition");
     auto CLASS_BLOCK_nonterm = cyth_parser_generator.new_nonterminal("class_block");
     auto CLASS_VARDEF_nonterm = cyth_parser_generator.new_nonterminal("class_variable_definition");
     auto CLASS_METHOD_nonterm = cyth_parser_generator.new_nonterminal("class_method_definition");
+
+    // blocks //
+    // construct
+    auto CONSTRUCT_BLOCK_nonterm = cyth_parser_generator.new_nonterminal("construct_block");
+    auto CONSTRUCT_LIST_nonterm = cyth_parser_generator.new_nonterminal("construct_list");
+    auto CONSTRUCT_ELEMENT_nonterm = cyth_parser_generator.new_nonterminal("construct_element");
 
     // types of names
     auto TYPENAME_nonterm = cyth_parser_generator.new_nonterminal("type_name");
@@ -900,6 +1027,8 @@ make_cyth_parser::make_cyth_parser(bool do_file_IO) : cyth_parser_generator("./c
     MODULE_nonterm->add_production({ MODULE_nonterm, completeImport_nonterm, EOF_term }).set_action<module_AST_ptr>( module_add_ASTnode<AST_node_ptr> );
     MODULE_nonterm->add_production({ MODULE_nonterm, STATEMENT_nonterm, STMT_term }).set_action<module_AST_ptr>( module_add_ASTnode<statement_AST_ptr> );
     MODULE_nonterm->add_production({ MODULE_nonterm, STATEMENT_nonterm, EOF_term }).set_action<module_AST_ptr>( module_add_ASTnode<statement_AST_ptr> );
+    MODULE_nonterm->add_production({ MODULE_nonterm, COMPILERCOMMAND_term, STMT_term }).set_action<module_AST_ptr>( module_add_CompilerCommand );
+    MODULE_nonterm->add_production({ MODULE_nonterm, COMPILERCOMMAND_term, EOF_term }).set_action<module_AST_ptr>( module_add_CompilerCommand );
 
 
 
@@ -910,12 +1039,17 @@ make_cyth_parser::make_cyth_parser(bool do_file_IO) : cyth_parser_generator("./c
     startingImport_nonterm->add_production({ CIMPORT_keyword, IDENTIFIER_term }).set_action<import_AST_ptr>( starting_Cimport_AST );
     startingImport_nonterm->add_production({ FROM_keyword, STRING_term, CIMPORT_keyword, IDENTIFIER_term }).set_action<import_AST_ptr>( startingFrom_Cimport_AST );
 
+    startingImport_nonterm->add_production({ FROM_keyword, STRING_term, IMPORT_keyword, IDENTIFIER_term }).set_action<import_AST_ptr>( startingFrom_Import_AST );
+
+
+
 
     // CLASSES
     CLASS_DEF_nonterm->add_production({ CLASS_BLOCK_nonterm, END_BLOCK_term }) .set_action<class_AST_ptr>( pass_ClassBlock );
     CLASS_DEF_nonterm->add_production({ CLASS_BLOCK_nonterm, CLASS_VARDEF_nonterm, END_BLOCK_term }) .set_action<class_AST_ptr>( ClassBlock_add_VarDefinition  );
 
     CLASS_BLOCK_nonterm->add_production({ CLASS_keyword, IDENTIFIER_term, NEW_BLOCK_term }) .set_action<class_AST_ptr>( make_class_AST );
+    CLASS_BLOCK_nonterm->add_production({ CLASS_keyword, IDENTIFIER_term, LPAREN_symbol, INHERITANCE_LIST_nonterm, RPAREN_symbol, NEW_BLOCK_term }) .set_action<class_AST_ptr>( make_classInheritance_AST );
     CLASS_BLOCK_nonterm->add_production({ CLASS_BLOCK_nonterm, CLASS_VARDEF_nonterm, STMT_term }) .set_action<class_AST_ptr>( ClassBlock_add_VarDefinition );
     CLASS_BLOCK_nonterm->add_production({ CLASS_BLOCK_nonterm, CLASS_METHOD_nonterm }) .set_action<class_AST_ptr>( ClassBlock_add_Method );
 
@@ -926,6 +1060,19 @@ make_cyth_parser::make_cyth_parser(bool do_file_IO) : cyth_parser_generator("./c
     CLASS_METHOD_nonterm->add_production({ DEF_keyword, IDENTIFIER_term, FUNC_PARAMS_nonterm , BLOCK_nonterm }) .set_action<method_AST_ptr>( make_method_AST );
     CLASS_METHOD_nonterm->add_production({ DEF_keyword, LCURLY_symbol, TYPENAME_nonterm, RCURLY_symbol, IDENTIFIER_term, FUNC_PARAMS_nonterm , BLOCK_nonterm }) .set_action<method_AST_ptr>( make_method_AST_WRetT );
 
+    // construct block
+    CONSTRUCT_BLOCK_nonterm->add_production({ CONSTRUCT_LIST_nonterm, END_BLOCK_term }) .set_action<construct_AST_ptr>( pass_construct );
+    CONSTRUCT_BLOCK_nonterm->add_production({ CONSTRUCT_LIST_nonterm, CONSTRUCT_ELEMENT_nonterm, END_BLOCK_term }) .set_action<construct_AST_ptr>( construct_add  );
+
+    CONSTRUCT_LIST_nonterm->add_production({ CONSTRUCT_keyword, NEW_BLOCK_term }) .set_action<construct_AST_ptr>( make_construct_AST );
+    CONSTRUCT_LIST_nonterm->add_production({ CONSTRUCT_LIST_nonterm, CONSTRUCT_ELEMENT_nonterm, STMT_term }) .set_action<construct_AST_ptr>( construct_add );
+
+    CONSTRUCT_ELEMENT_nonterm->add_production({ EXPRESSION_nonterm, CALL_ARGUMENTS_nonterm }) .set_action<constructElement_AST_ptr>( make_constructElement_AST );
+
+    // inheritance
+    INHERITANCE_LIST_nonterm->add_production({ }).set_action<inheritanceList_AST_ptr>( make_inheritanceList_AST );
+    INHERITANCE_LIST_nonterm->add_production({ IDENTIFIER_term }).set_action<inheritanceList_AST_ptr>( make_inheritanceList_Item_AST );
+    INHERITANCE_LIST_nonterm->add_production({ INHERITANCE_LIST_nonterm, COMMA_symbol, IDENTIFIER_term }).set_action<inheritanceList_AST_ptr>( inheritanceList_addItem );
 
 
 
@@ -968,6 +1115,7 @@ make_cyth_parser::make_cyth_parser(bool do_file_IO) : cyth_parser_generator("./c
 
     BLOCKlist_nonterm->add_production({ NEW_BLOCK_term }) .set_action<block_AST_ptr>( make_block_AST );
     BLOCKlist_nonterm->add_production({ BLOCKlist_nonterm, STATEMENT_nonterm, STMT_term }) .set_action<block_AST_ptr>( block_add_ASTnode<statement_AST_ptr> );
+    BLOCKlist_nonterm->add_production({ BLOCKlist_nonterm, CONSTRUCT_BLOCK_nonterm }) .set_action<block_AST_ptr>( block_add_ASTnode<construct_AST_ptr> );
 //BLOCKlist_nonterm->add_production({ BLOCKlist_nonterm, FUNC_DEF_nonterm }) .set_action<block_AST_ptr>( block_add_ASTnode<function_AST_ptr> ); // need to implement closure!! NOTE: when a closured variable goes out of scope, perhaps copy it to a dynamic variable?
 //BLOCKlist_nonterm->add_production({ BLOCKlist_nonterm, CLASS_DEF_nonterm }) .set_action<block_AST_ptr>( block_add_ASTnode<class_AST_ptr> ); // need to make sure this works
 
@@ -987,6 +1135,7 @@ make_cyth_parser::make_cyth_parser(bool do_file_IO) : cyth_parser_generator("./c
     //Statements
     STATEMENT_nonterm->add_production({ EXPRESSION_nonterm }) .set_action<statement_AST_ptr>( make_statement_expression_AST );
     STATEMENT_nonterm->add_production({ TYPENAME_nonterm, IDENTIFIER_term}) .set_action<statement_AST_ptr>( make_statement_definition_AST );
+    STATEMENT_nonterm->add_production({ TYPENAME_nonterm, IDENTIFIER_term, CALL_ARGUMENTS_nonterm }) .set_action<statement_AST_ptr>( make_statement_definitionNconstruction_AST );
     //STATEMENT_nonterm->add_production({ IDENTIFIER_term, EQUALS_symbol, EXPRESSION_nonterm}) .set_action<statement_AST_ptr>( make_statement_assignment_AST ); // eventually this should use generic LHS symbols
     STATEMENT_nonterm->add_production({ LHS_REFERENCE_nonterm, EQUALS_symbol, EXPRESSION_nonterm}) .set_action<statement_AST_ptr>( make_statement_assignment_AST );
     STATEMENT_nonterm->add_production({ AUTO_keyword, IDENTIFIER_term, EQUALS_symbol, EXPRESSION_nonterm }) .set_action<statement_AST_ptr>( make_auto_definition_AST );

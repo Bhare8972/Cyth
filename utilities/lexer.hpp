@@ -44,10 +44,12 @@ class location
     friend std::ostream& operator<<(std::ostream& os, const location& dt);
     public:
 
+    utf8_string file_name;
     int line;
     int column;
 
     location();
+    location(utf8_string& _file_name);
     location(const location& RHS);
     //move the location forward according to some string
 
@@ -91,6 +93,7 @@ class ring_buffer
 //ring_buffer class is used to store data in from a file so it can be processed
 //implimented like a doubly-linked list
 {
+    std::istream& fin;
 public:
     class ring_buffer_node
     //stores a single code point
@@ -107,7 +110,6 @@ public:
         }
     };
 
-    std::istream fin;
     bool has_loaded_EOF; //is true if the entire file has been loaded. EG: empty_node is at end of file
     bool has_read_EOF; //is true if has_loaded_EOF is true and end_node==empty_node
     ring_buffer_node* start_node; //beginning of the loaded and read data
@@ -117,7 +119,7 @@ public:
     int length_loaded; //distance from start_node to empty_node
     int n_nodes;
 
-    ring_buffer(const std::istream& fin_);
+    ring_buffer( std::istream& fin_);
     ~ring_buffer();
 
     void add_nodes(int n_nodes_);
@@ -264,14 +266,14 @@ public:
     }
 
     //functions to control buffer
-    void set_input(utf8_string& file_name)
-    {
-        std::ifstream fin(file_name.to_cpp_string());
-        input_buffer = std::shared_ptr<ring_buffer>( new ring_buffer(fin)); //this line may need to be updated
-        loc = location();//reset location
-    }
+//    void set_input(utf8_string& file_name)
+//    {
+//        std::ifstream fin(file_name.to_cpp_string());
+//        input_buffer = std::shared_ptr<ring_buffer>( new ring_buffer(fin)); //this line may need to be updated
+//        loc = location( file_name );//reset location
+//    }
 
-    void set_input(const std::istream& _input)
+    void set_input(std::istream& _input)
     {
         input_buffer = std::shared_ptr<ring_buffer>(new ring_buffer(_input));
         loc = location();//reset location
@@ -339,6 +341,7 @@ public:
                 }
             }
 
+
             if(input_buffer->has_read_EOF and DFA_state->accepting_info != -1)
             //there may be an unaccepted state if the next char is EOF
             {
@@ -352,6 +355,7 @@ public:
                 utf8_string data = input_buffer->reset_string();
                 location_span span = loc.update(data);
                 auto ret_data = (*actions)[last_action_index](data, span, this); //control functions can be called here, and change lexer state
+
                 //std::string tmp;
                 if(not continue_lexing_b)
                 {

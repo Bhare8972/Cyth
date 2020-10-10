@@ -1755,13 +1755,13 @@ void parser::state_string(std::ostream& os)
     os<<']';
 }
 
-void parser::reset_input(utf8_string& file_name)
-{
-    reset();
-    lex->set_input(file_name);
-}
+//void parser::reset_input(utf8_string& file_name)
+//{
+//    reset();
+//    lex->set_input(file_name);
+//}
 
-void parser::reset_input(const std::istream& _input)
+void parser::reset_input(std::istream& _input)
 {
     reset();
     lex->set_input(_input);

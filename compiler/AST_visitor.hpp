@@ -60,7 +60,9 @@ public:
 
     virtual void allImports_down(import_AST_node* ASTnode){}
     virtual void cImports_down(import_C_AST_node* ASTnode){}
+    virtual void CythImports_down(import_cyth_AST_node* ASTnode){}
 
+    virtual void inheritanceList_down( inheritanceList_AST_node* inheritanceList_node){}
     virtual void ClassDef_down( class_AST_node* class_node){}
 
     virtual void block_down(block_AST_node* block){}
@@ -82,9 +84,11 @@ public:
 
     virtual void statement_down(statement_AST_node* statment){}
     virtual void generic_VarDef_down(General_VarDefinition* vardef){}
+    virtual void typed_VarDef_down(Typed_VarDefinition* var_def){}
 
     virtual void ClassVarDef_down( class_varDefinition_AST_node* class_var_def ){}
     virtual void definitionStmt_down(definition_statement_AST_node* defStmt){}
+    virtual void definitionNconstructionStmt_down(definitionNconstruction_statement_AST_node* defStmt){}
 
     virtual void expressionStatement_down(expression_statement_AST_node* expStmt){}
     virtual void assignmentStmt_down(assignment_statement_AST_node* assignStmt){}
@@ -103,10 +107,14 @@ public:
     virtual void accessorExp_down(accessor_expression_AST_node* accessorExp){}
     virtual void functionCall_Exp_down(functionCall_expression_AST_node* funcCall){}
 
+    virtual void constructBlock_down(construct_AST_node* constructBlock){}
+    virtual void constructElement_down(constructElement_AST_node* constructBlock){}
+
+
+
+
     // if apply_to_children returns False, then the visitor stops here, childern are not called, and UP (for this node) is not called. NOte that UP for the higher nodes is still called
     // and the visitor may continue like normal on sibling nodes.
-
-
 
 
     // UP  THESE are called last, after up is called on all children, in order of decreasing generality
@@ -115,8 +123,11 @@ public:
 
     virtual void allImports_up(import_AST_node* ASTnode){}
     virtual void cImports_up(import_C_AST_node* ASTnode){}
+    virtual void CythImports_up(import_cyth_AST_node* ASTnode){}
 
-    virtual void ClassDef_up( class_AST_node* block, std::list<AST_visitor_base*>& var_def_children, std::list<AST_visitor_base*>& method_def_children ) {}
+    virtual void inheritanceList_up( inheritanceList_AST_node* inheritanceList_node){}
+    virtual void ClassDef_up( class_AST_node* clss, std::list<AST_visitor_base*>& var_def_children,
+                             std::list<AST_visitor_base*>& method_def_children, AST_visitor_base* inheritanceList_child ) {}
 
     virtual void block_up(block_AST_node* block, std::list<AST_visitor_base*>& visitor_children){}
     virtual void callableDef_up(callableDefinition_AST_node* callDef, AST_visitor_base* paramList_child){}
@@ -140,10 +151,12 @@ public:
     virtual void varTypeRepr_up(varType_ASTrepr_node* varTypeRepr){}
 
     virtual void statement_up(statement_AST_node* statment){}
-    virtual void generic_VarDef_up(General_VarDefinition* var_def, AST_visitor_base* var_type){}
+    virtual void generic_VarDef_up(General_VarDefinition* var_def){}
+    virtual void typed_VarDef_up(Typed_VarDefinition* var_def, AST_visitor_base* varTypeRepr_child){}
 
     virtual void ClassVarDef_up( class_varDefinition_AST_node* class_var_def, AST_visitor_base* varType, AST_visitor_base* default_exp){}
     virtual void definitionStmt_up(definition_statement_AST_node* defStmt, AST_visitor_base* varTypeRepr_child){}
+    virtual void definitionNconstruction_up(definitionNconstruction_statement_AST_node* defStmt, AST_visitor_base* varTypeRepr_child, AST_visitor_base* argList_child){}
 
     virtual void expressionStatement_up(expression_statement_AST_node* expStmt, AST_visitor_base* expression_child){}
     virtual void assignmentStmt_up(assignment_statement_AST_node* assignStmt, AST_visitor_base* LHS_reference_child, AST_visitor_base* expression_child){}
@@ -161,6 +174,9 @@ public:
     virtual void ParenExpGrouping_up(ParenGrouped_expression_AST_node* parenGroupExp, AST_visitor_base* expChild_visitor){}
     virtual void accessorExp_up(accessor_expression_AST_node* accessorExp, AST_visitor_base* expChild_visitor){}
     virtual void functionCall_Exp_up(functionCall_expression_AST_node* funcCall, AST_visitor_base* expression_child, AST_visitor_base* arguments_child){}
+
+    virtual void constructBlock_up(construct_AST_node* constructBlock, std::list<AST_visitor_base*>& visitor_children){}
+    virtual void constructElement_up(constructElement_AST_node* constructBlock, AST_visitor_base* exp_child, AST_visitor_base* argList_child){}
 
 };
 
@@ -197,6 +213,30 @@ public:
     // this is called for every child after down, before down is called on child
     virtual std::shared_ptr< AST_visitor_base > make_child(int number)=0;
 };
+
+template<class visitor_type>
+class revisitor_tree : public AST_visitorTree
+{
+public :
+    visitor_type* twin;
+
+    virtual std::shared_ptr< revisitor_tree<visitor_type> > make_revistor_child(int number)=0;
+
+    std::shared_ptr< AST_visitor_base > make_child(int number) final
+    {
+        auto new_child = make_revistor_child( number );
+        new_child->twin = dynamic_cast<visitor_type*>( twin->get_child( number ) );
+        return new_child;
+    }
+};
+
+
+template< class visitor_type >
+void apply_revisitor(AST_node* applied_node, visitor_type* visitor_to_visit, revisitor_tree<visitor_type>* revisitor  )
+{
+    revisitor->twin = visitor_to_visit;
+    applied_node->apply_visitor( revisitor );
+}
 
 
 // This overloads the opererators so that the visitor goes down then back up the tree without generating more memory
@@ -262,8 +302,11 @@ public:
 
     void allImports_up(import_AST_node* ASTnode) final {}
     void cImports_up(import_C_AST_node* ASTnode) final {}
+    void CythImports_up(import_cyth_AST_node* ASTnode) final {}
 
-    void ClassDef_up( class_AST_node* block, std::list<AST_visitor_base*>& var_def_children, std::list<AST_visitor_base*>& method_def_children )  final {}
+    void inheritanceList_up( inheritanceList_AST_node* inheritanceList_node) final {}
+    void ClassDef_up( class_AST_node* block, std::list<AST_visitor_base*>& var_def_children, std::list<AST_visitor_base*>& method_def_children
+                     , AST_visitor_base* inheritanceList_child  ) final {}
 
     void block_up(block_AST_node* block, std::list<AST_visitor_base*>& visitor_children) final {}
     void callableDef_up(callableDefinition_AST_node* callDef, AST_visitor_base* paramList_child) final {}
@@ -285,27 +328,33 @@ public:
     void varTypeRepr_up(varType_ASTrepr_node* varTypeRepr) final {}
 
     void statement_up(statement_AST_node* statment) final {}
-    void generic_VarDef_up(General_VarDefinition* var_def, AST_visitor_base* var_type) final {}
+    void generic_VarDef_up(General_VarDefinition* var_def) final {}
+    void typed_VarDef_up(Typed_VarDefinition* var_def, AST_visitor_base* varTypeRepr_child) final {}
 
     void ClassVarDef_up( class_varDefinition_AST_node* class_var_def, AST_visitor_base* varType, AST_visitor_base* default_exp) final {}
     void definitionStmt_up(definition_statement_AST_node* defStmt, AST_visitor_base* varTypeRepr_child) final {}
 
-     void expressionStatement_up(expression_statement_AST_node* expStmt, AST_visitor_base* expression_child) final {}
-     void assignmentStmt_up(assignment_statement_AST_node* assignStmt, AST_visitor_base* LHS_reference_child, AST_visitor_base* expression_child) final {}
-     void autoDefStmt_up(auto_definition_statement_AST_node* autoStmt, AST_visitor_base* expression_child) final {}
-     void returnStatement_up(return_statement_AST_node* returnStmt, AST_visitor_base* expression_child) final {}
+    void definitionNconstruction_up(definitionNconstruction_statement_AST_node* defStmt, AST_visitor_base* varTypeRepr_child, AST_visitor_base* argList_child) final {}
 
-     void LHSReference_up(LHS_reference_AST_node* LHS_ref) final {}
-     void LHS_varRef_up(LHS_varReference* varref) final {}
-     void LHS_accessor_up(LHS_accessor_AST_node* LHSaccess, AST_visitor_base* LHSref_visitor) final {}
+    void expressionStatement_up(expression_statement_AST_node* expStmt, AST_visitor_base* expression_child) final {}
+    void assignmentStmt_up(assignment_statement_AST_node* assignStmt, AST_visitor_base* LHS_reference_child, AST_visitor_base* expression_child) final {}
+    void autoDefStmt_up(auto_definition_statement_AST_node* autoStmt, AST_visitor_base* expression_child) final {}
+    void returnStatement_up(return_statement_AST_node* returnStmt, AST_visitor_base* expression_child) final {}
 
-     void expression_up(expression_AST_node* expression) final {}
-     void intLiteral_up(intLiteral_expression_AST_node* intLitExp) final {}
-     void binOperator_up(binOperator_expression_AST_node* binOprExp, AST_visitor_base* LHS_exp_visitor, AST_visitor_base* RHS_exp_visitor) final {}
-     void varReferance_up(varReferance_expression_AST_node* varRefExp) final {}
-     void ParenExpGrouping_up(ParenGrouped_expression_AST_node* parenGroupExp, AST_visitor_base* expChild_visitor) final {}
-     void accessorExp_up(accessor_expression_AST_node* accessorExp, AST_visitor_base* expChild_visitor) final {}
-     void functionCall_Exp_up(functionCall_expression_AST_node* funcCall, AST_visitor_base* expression_child, AST_visitor_base* arguments_child) final {}
+    void LHSReference_up(LHS_reference_AST_node* LHS_ref) final {}
+    void LHS_varRef_up(LHS_varReference* varref) final {}
+    void LHS_accessor_up(LHS_accessor_AST_node* LHSaccess, AST_visitor_base* LHSref_visitor) final {}
+
+    void expression_up(expression_AST_node* expression) final {}
+    void intLiteral_up(intLiteral_expression_AST_node* intLitExp) final {}
+    void binOperator_up(binOperator_expression_AST_node* binOprExp, AST_visitor_base* LHS_exp_visitor, AST_visitor_base* RHS_exp_visitor) final {}
+    void varReferance_up(varReferance_expression_AST_node* varRefExp) final {}
+    void ParenExpGrouping_up(ParenGrouped_expression_AST_node* parenGroupExp, AST_visitor_base* expChild_visitor) final {}
+    void accessorExp_up(accessor_expression_AST_node* accessorExp, AST_visitor_base* expChild_visitor) final {}
+    void functionCall_Exp_up(functionCall_expression_AST_node* funcCall, AST_visitor_base* expression_child, AST_visitor_base* arguments_child) final {}
+
+    void constructBlock_up(construct_AST_node* constructBlock, std::list<AST_visitor_base*>& visitor_children) final {}
+    void constructElement_up(constructElement_AST_node* constructBlock, AST_visitor_base* exp_child, AST_visitor_base* argList_child) final {}
 
 };
 

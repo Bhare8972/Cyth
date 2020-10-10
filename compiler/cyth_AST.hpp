@@ -46,6 +46,15 @@ typedef std::shared_ptr<import_AST_node> import_AST_ptr;
 class class_AST_node;
 typedef std::shared_ptr<class_AST_node> class_AST_ptr;
 
+class inheritanceList_AST_node;
+typedef std::shared_ptr<inheritanceList_AST_node> inheritanceList_AST_ptr;
+
+class construct_AST_node;
+typedef std::shared_ptr<construct_AST_node> construct_AST_ptr;
+
+class constructElement_AST_node;
+typedef std::shared_ptr<constructElement_AST_node> constructElement_AST_ptr;
+
 class class_varDefinition_AST_node;
 typedef std::shared_ptr<class_varDefinition_AST_node> ClassVarDef_AST_ptr;
 
@@ -78,7 +87,7 @@ typedef std::shared_ptr<expression_AST_node> expression_AST_ptr;
 
 
 //// the AST nodes ////
-class AST_node
+class AST_node : public std::enable_shared_from_this<AST_node> // TODO! use shared_from_this()
 {
 public:
     csu::location_span loc;
@@ -97,13 +106,33 @@ class module_AST_node : public AST_node
 {
     // verified in verify_symbol_table visitor (acclimate from children)
 public:
+    class compiler_command
+    {
+    public:
+        compiler_command(std::string _command, csu::location_span _loc);
+
+        std::string command;
+        csu::location_span loc;
+    };
+
+
     std::list<AST_node_ptr> module_contents;
     module_sym_table top_symbol_table;
     int max_symbol_loops; //eventully compiler commands could change this
-    csu::utf8_string module_name;
+
+    std::string module_name;
+    std::string file_name;
+    std::string C_header_fname;
+    std::string C_source_fname;
+
     int main_status; // -2 is default (not checked)
     // after running find_main_func, set to -1 if problem, 0 if no __main__, 1 if good __main__
     csu::utf8_string main_func_name;
+    std::string C_mainSource_fname;
+
+    // these are found and set by the parser/module manager
+    std::list< std::string > imported_C_files;
+    std::list< std::string > imported_cyth_modules;
 
     module_AST_node();
 
@@ -112,6 +141,9 @@ public:
     void apply_visitor(AST_visitor_base* visitor);
 
     void find_main_func();
+
+    void add_CompilerCommand( csu::utf8_string _command, csu::location_span _loc );
+    std::list< compiler_command > compiler_comands;
 };
 
 
@@ -154,6 +186,27 @@ public:
 };
 
 
+class import_cyth_AST_node : public import_AST_node
+{
+    // verified in set_symbol_table visitor
+public:
+    csu::utf8_string file_name;
+
+    csu::utf8_string import_module_Cheader_fname; // set in define_names visitor
+
+    // these are fully defined during the define_names visitor
+    //varType_ptr type;
+    //varName_ptr variable;
+    //varType_ptr variable_type; // the unnamed type of the variable. This is not placed in the namespace
+    // note variable_type is actually a referance, not a definition. Though still set in define_names visitor
+
+    import_cyth_AST_node(csu::utf8_string _file_name, csu::utf8_string _import_name, csu::location_span _loc);
+    import_cyth_AST_node(csu::utf8_string _import_name, csu::location_span _loc);
+    void set_usage_name(csu::utf8_string _usage_name);
+
+    void apply_visitor(AST_visitor_base* visitor);
+};
+
 
 
 
@@ -178,11 +231,16 @@ public:
 class General_VarDefinition : public statement_AST_node
 {
 public:
-    varType_ASTrepr_ptr var_type;
     csu::utf8_string var_name;
     varName_ptr variable_symbol;
 
     General_VarDefinition();
+};
+
+class Typed_VarDefinition : public General_VarDefinition
+{
+public:
+    varType_ASTrepr_ptr var_type;
 };
 
 
@@ -194,13 +252,25 @@ public:
 
 /// CLASSES
 
-class class_varDefinition_AST_node : public General_VarDefinition
+class class_varDefinition_AST_node : public Typed_VarDefinition
 {
 public:
     expression_AST_ptr default_value; // note is AST node
     // maybe need to move this to general definition??
 
     class_varDefinition_AST_node(varType_ASTrepr_ptr _var_type, csu::utf8_string _var_name, csu::location_span _loc);
+
+    void apply_visitor(AST_visitor_base* visitor);
+};
+
+class inheritanceList_AST_node : public AST_node
+{
+public:
+    std::list< csu::utf8_string > class_IDs;
+    std::list< ClassType_ptr > types; // set by visitors
+
+    inheritanceList_AST_node(){}
+    void add_item(csu::utf8_string &item, csu::location_span &_loc);
 
     void apply_visitor(AST_visitor_base* visitor);
 };
@@ -212,11 +282,23 @@ public:
     csu::utf8_string name;
     sym_table_ptr inner_symbol_table;
     ClassType_ptr type_ptr; // set in define_names visitor
+    varName_ptr self_name; // note, this is NOT same type as  type_ptr, is some kind of reference type
+
+    inheritanceList_AST_ptr inheritanceList;
+
+    bool write_default_constructor;
+    MethodType::ResolvedMethod_ptr default_constructor_overload; // set if and only if write_default_constructor is true
+
+    bool write_default_deconstructor;
+    MethodType::ResolvedMethod_ptr default_destructor_overload;
+
+    bool write_selfCopy_constructor;
+    MethodType::ResolvedMethod_ptr default_CopyConstructor_overload;
 
     std::list<ClassVarDef_AST_ptr> var_definitions;
     std::list<method_AST_ptr> method_definitions;
 
-    class_AST_node(csu::utf8_string _name, csu::location_span _loc);
+    class_AST_node(csu::utf8_string _name, inheritanceList_AST_ptr _inheritanceList, csu::location_span _loc);
     void apply_visitor(AST_visitor_base* visitor);
 
 
@@ -224,6 +306,32 @@ public:
     void add_method_def(method_AST_ptr new_method_definition);
 };
 
+// construct block
+class construct_AST_node : public AST_node
+{
+    // verified in verify_symbol_table visitor (acclimate from children)
+public:
+    std::list<constructElement_AST_ptr> contents;
+
+    construct_AST_node(csu::location_span initial_loc);
+
+    void add(constructElement_AST_ptr _newElement);
+
+    void apply_visitor(AST_visitor_base* visitor);
+};
+
+class constructElement_AST_node : public AST_node
+{
+    // verified in verify_symbol_table visitor (acclimate from children)
+public:
+
+    expression_AST_ptr expression;
+    argumentList_AST_ptr argument_list;
+
+    constructElement_AST_node(expression_AST_ptr _expression,  argumentList_AST_ptr _argument_list, csu::location_span initial_loc);
+
+    void apply_visitor(AST_visitor_base* visitor);
+};
 
 
 
@@ -277,7 +385,7 @@ public:
 
     callableDefinition_AST_node();
 
-    virtual void notify_return_type()=0;
+    virtual void notify_return_type()=0; // this is called in build_types visitor exactly once, after we know the return type
 };
 
 class function_AST_node : public callableDefinition_AST_node
@@ -384,7 +492,7 @@ public:
 
     sym_table_ptr inner_symbol_table;
 
-    varName_ptr self_name; // defined name "self" refering to the class. Oddly, set in set_symbol_table visitor
+    //varName_ptr self_name; // defined name "self" refering to the class. Oddly, set in set_symbol_table visitor
         // type is C-pointer to class_type, and thus type is set when class_type is.
     varType_ptr class_type;// type of class that this is member of. Set in define_names by ClassDef_down visitor
 
@@ -432,13 +540,24 @@ public:
     void apply_visitor(AST_visitor_base* visitor);
 };
 
-class definition_statement_AST_node : public General_VarDefinition
+class definition_statement_AST_node : public Typed_VarDefinition
 {
     // partially verified in define_names visitor
     // fully verified in build_types
 public:
 
     definition_statement_AST_node(varType_ASTrepr_ptr _var_type, csu::utf8_string _var_name, csu::location_span _loc);
+
+    void apply_visitor(AST_visitor_base* visitor);
+};
+
+class definitionNconstruction_statement_AST_node : public Typed_VarDefinition
+{
+
+public:
+    argumentList_AST_ptr argument_list;
+
+    definitionNconstruction_statement_AST_node(varType_ASTrepr_ptr _var_type, csu::utf8_string _var_name, argumentList_AST_ptr _argument_list, csu::location_span _loc);
 
     void apply_visitor(AST_visitor_base* visitor);
 };
@@ -458,14 +577,19 @@ public:
     void apply_visitor(AST_visitor_base* visitor);
 };
 
-class auto_definition_statement_AST_node : public statement_AST_node // oddly enough, not a "generic definition"?
+class auto_definition_statement_AST_node : public General_VarDefinition
 {
 // partially verified in define_names
 // partially verified in build_types
 // fully verified in verify_symbol_table
+
+// General_VarDefinition
+//    csu::utf8_string var_name;
+//    varName_ptr variable_symbol;
+
 public:
-    csu::utf8_string var_name;
-    varName_ptr variable_symbol; // set in define_names visitor. Type set in build_types visitor
+    //csu::utf8_string var_name;
+    //varName_ptr variable_symbol; // set in define_names visitor. Type set in build_types visitor
     expression_AST_ptr expression;
 
     auto_definition_statement_AST_node(csu::utf8_string& _var_name, expression_AST_ptr _expression, csu::location_span _loc);
@@ -495,7 +619,7 @@ public:
     {
         public:
 
-        std::list<expression_AST_ptr> arguments;
+        std::vector<expression_AST_ptr> arguments;
     };
 
     class unnamed_arguments_T : public base_arguments_T
@@ -514,7 +638,7 @@ public:
     class named_arguments_T : public base_arguments_T
     {
     public:
-        std::list<csu::utf8_string> names;
+        std::vector<csu::utf8_string> names;
 
         named_arguments_T( csu::location_span _loc );
         void add_argument( csu::utf8_string& name, expression_AST_ptr new_argument, csu::location_span _loc );
@@ -531,13 +655,20 @@ public:
 
     call_argument_list(csu::location_span _loc, un_arguments_ptr _unnamed_list, named_arguments_ptr _named_list); // these can be null as necisary.
 
-    callArg_types_ptr get_argument_info();
+    int num_unnamed();
+    int num_named();
+
+    expression_AST_ptr unNamedExp_by_index(int i);
+    expression_AST_ptr namedExp_by_index(int i);
+    csu::utf8_string namedExpName_by_index(int i);
+
+    int total_size();
     expression_AST_ptr expression_from_index(int i);
+
+    void print(std::ostream& output);
 
     void apply_visitor(AST_visitor_base* visitor);
 };
-
-
 
 
 
@@ -556,6 +687,7 @@ public:
     // technically I guess these should be different nodes in some way. But I will try to avoid that (would actually be MORE complex).
 
     varType_ptr reference_type; // set in build_types. all LHS_references must be checked there
+    exp_writer_ptr writer; // technically is an expression, so we need this. Used by C-writer visiters
 
     LHS_reference_AST_node();
 };
@@ -600,6 +732,15 @@ class expression_AST_node : public AST_node
 public:
 
     varType_ptr expression_return_type; // set in build_types. all expresions must be checked there
+
+    bool has_output_ownership;
+    // set to true if cleanup has job to run destructor on this output.  default is true.
+    // Sometimes set to false on rare occasion by extrnal code, when an external code takes charge of the object
+
+    // these are set by the writer
+    //csu::utf8_string C_exp;
+    exp_writer_ptr writer;
+    bool c_exp_can_be_referenced;
 
     expression_AST_node();
 };
@@ -683,7 +824,6 @@ class functionCall_expression_AST_node : public expression_AST_node
 public:
     expression_AST_ptr expression;
     argumentList_AST_ptr argument_list;
-    funcCallWriter_ptr function_to_write; // set in build_types visitor
 
 
     functionCall_expression_AST_node( expression_AST_ptr _expression, argumentList_AST_ptr _argument_list, csu::location_span _loc);

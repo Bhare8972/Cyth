@@ -29,8 +29,16 @@ location::location()
     column = 0;
 }
 
+location::location(utf8_string& _file_name)
+{
+    file_name = _file_name;
+    line = 1;
+    column = 0;
+}
+
 location::location(const location& RHS)
 {
+    file_name = RHS.file_name;
     line = RHS.line;
     column=  RHS.column;
 }
@@ -76,8 +84,9 @@ void location::backup(utf8_string& input)
 
 location& location::operator=(const location& other)
 {
-    line=other.line;
-    column=other.column;
+    line = other.line;
+    column = other.column;
+    file_name = other.file_name;
     return *this;
 }
 
@@ -108,7 +117,7 @@ bool location::operator>=(const location& LHS) const
 
 ostream& csu::operator<<(ostream& os, const location& dt)
 {
-    os<<"line "<<dt.line<<":"<<dt.column;
+    os << "line " << dt.line << ":" << dt.column << '(' << dt.file_name << ')';
     return os;
 }
 
@@ -174,12 +183,13 @@ bool location_span::strictly_LT(const location_span& LHS)
 
 ostream& csu::operator<<(ostream& os, const location_span& dt)
 {
-    os<<"from "<<dt.start<<" to "<<dt.end;
+    os << "from " << dt.start << " to " << dt.end;
     return os;
 }
 
 //ring buffer
-ring_buffer::ring_buffer(const istream& fin_) :fin(fin_.rdbuf())
+ring_buffer::ring_buffer( istream& fin_) ://:fin(fin_.rdbuf())
+    fin(fin_)
 {
     has_loaded_EOF=false;
     has_read_EOF=false;
@@ -202,12 +212,12 @@ ring_buffer::ring_buffer(const istream& fin_) :fin(fin_.rdbuf())
 ring_buffer::~ring_buffer()
 {
     auto current_node=start_node;
-    current_node->previous->next=0;
-    while(current_node->next!=0)
+    current_node->previous->next = 0;
+    while(current_node->next != 0)
     {
-        auto next_node=current_node->next;
+        auto next_node = current_node->next;
         delete current_node;
-        current_node=next_node;
+        current_node = next_node;
     }
 }
 
@@ -215,35 +225,39 @@ void ring_buffer::add_nodes(int n_nodes_)
 //create extra empty nodes after the empty node
 {
     ring_buffer_node* new_node=new ring_buffer_node();
-    new_node->previous=empty_node;
-    auto final_node=empty_node->next;
+    new_node->previous = empty_node;
+    auto final_node = empty_node->next;
     empty_node->next=new_node;
 
     auto previous_node=new_node;
     for(int i=0; i<n_nodes_; i++)
     {
         new_node=new ring_buffer_node();
-        previous_node->next=new_node;
-        new_node->previous=previous_node;
-        previous_node=new_node;
+        previous_node->next = new_node;
+        new_node->previous = previous_node;
+        previous_node = new_node;
     }
 
-    previous_node->next=final_node;
-    final_node->previous=previous_node;
-    n_nodes+=n_nodes_;
+    previous_node->next = final_node;
+    final_node->previous = previous_node;
+    n_nodes += n_nodes_;
 }
 
 void ring_buffer::load_data()
 {
-    if(has_loaded_EOF) return;
-    if(fin.eof())
+    if(has_loaded_EOF)
+    {
+        return;
+    }
+    if( not fin.good() )
     {
         has_loaded_EOF=true;
         return;
     }
-    while( (empty_node->next != start_node) and (not fin.eof()))
+    while( (empty_node->next != start_node) and fin.good())
     {
-        empty_node->charector=code_point(fin);
+        auto A = code_point(fin);
+        empty_node->charector = A;
         if(empty_node->charector.is_empty())
         {
             has_loaded_EOF=true;
@@ -255,7 +269,7 @@ void ring_buffer::load_data()
         }
     }
 
-    if(fin.eof())
+    if( not fin.good())
     {
         has_loaded_EOF=true;
     }
@@ -264,6 +278,7 @@ void ring_buffer::load_data()
 code_point ring_buffer::next()
 //return next charector, without 'reading' it
 {
+    load_data();
     if(end_node==empty_node)
     {
         return code_point();
@@ -364,7 +379,7 @@ void ring_buffer::put(utf8_string& data)
     for(auto& charector : data)
     {
         empty_node->charector=charector;
-        empty_node=empty_node->next;
+        empty_node = empty_node->next;
         length_loaded++;
     }
 

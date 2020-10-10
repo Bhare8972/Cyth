@@ -30,7 +30,7 @@ static const uint32_t offsetsFromUTF8[4] = { 0x00000000UL, 0x00003080UL, 0x000E2
 //begin code_point methods
 code_point::code_point()
 {
-    code_units=NULL;
+    code_units = NULL;
 }
 
 code_point::code_point( const code_point& rhs)
@@ -41,18 +41,18 @@ code_point::code_point( const code_point& rhs)
         return;
     }
 
-    int l=rhs.NUnits();
-    code_units=new uint8_t[l];
+    int l = rhs.NUnits();
+    code_units = new uint8_t[l];
     for(int x=0; x<l; x++)
     {
-        code_units[x]=rhs[x];
+        code_units[x ]= rhs[x];
     }
 }
 
 code_point::code_point( const uint32_t _UTF32)
 //create a UTF-8 codepoint from UTF 32. Not 100% sure this is correct. will throw general exception if the number is larger than 1FFFFF
 {
-    auto UTF32=_UTF32;
+    auto UTF32 = _UTF32;
     code_units=0;
 
     unsigned short bytesToWrite = 0;
@@ -101,35 +101,34 @@ code_point::code_point(std::istream& input_stream)
     code_units=0;
 
     int first_char;
-    first_char=input_stream.get();
-    if(first_char==EOF)
+    first_char = input_stream.get();
+    if( not input_stream.good() )
     {
         //we have reached end-of-file.
         //leave codepoint empty, hope someone catches it
         return;
     }
 
-    int NUNITS=NUnits(first_char);
-    code_units=new uint8_t[NUNITS];
-    code_units[0]=first_char;
-
+    int NUNITS = NUnits(first_char);
+    code_units = new uint8_t[NUNITS];
+    code_units[0] = first_char;
 
     int a=1;
     switch(NUNITS)
     {
-        case 4: code_units[a]=input_stream.get(); a++;
-        case 3: code_units[a]=input_stream.get(); a++;
-        case 2: code_units[a]=input_stream.get(); a++;
+        case 4: code_units[a] = input_stream.get(); a++;
+        case 3: code_units[a] = input_stream.get(); a++;
+        case 2: code_units[a] = input_stream.get(); a++;
     }
 }
 
 code_point::code_point( const std::initializer_list<uint8_t> units)
 {
-    code_units=new uint8_t[units.size()];
-    auto init_iter=units.begin();
+    code_units = new uint8_t[units.size()];
+    auto init_iter = units.begin();
     for(uint x=0; x<units.size(); x++)
     {
-        code_units[x]=*init_iter;
+        code_units[x] = *init_iter;
         init_iter++;
     }
 }
@@ -166,7 +165,7 @@ bool code_point::operator== (const utf8_string& rhs) const
 
     const code_point& rhs_pnt=rhs[0];
 
-    int l=NUnits();
+    int l= NUnits();
     if(l==rhs_pnt.NUnits())
     {
         for(int i=0; i<l; i++)
@@ -184,8 +183,8 @@ code_point& code_point::operator=(const code_point& other)
 {
     if (this != &other) // self-assignment check expected
     {
-        int l=other.NUnits();
-        if(l==0)
+        int l = other.NUnits();
+        if(l == 0)
         {
             if(code_units)
                 delete[] code_units;
@@ -430,17 +429,17 @@ bool csu::operator>(const code_point& lhs, const code_point& rhs)
 //constructors
 utf8_string::utf8_string(const utf8_string& RHS)
 {
-    length=RHS.length;
-    capacity=RHS.length;
-    points=new code_point[RHS.length];
+    length = RHS.length;
+    capacity = RHS.length;
+    points = new code_point[RHS.length];
 
     for( int i=0; i<RHS.length; i++ )
     {
-        points[i]=RHS[i];
+        points[i] = RHS[i];
     }
 }
 
-utf8_string::utf8_string(uint8_t _capacity)
+utf8_string::utf8_string(size_t _capacity)
 {
     length=0;
     capacity=0;
@@ -486,93 +485,93 @@ utf8_string::~utf8_string()
 void utf8_string::from_cpp_string(const std::string& input)
 //replaces content with content in input. Throws gen_exception if input is not UTF-8
 {
-    uint8_t position=0;
-    uint8_t new_length=0;
+    size_t position=0;
+    size_t new_length=0;
     while( position<input.length() )
     {
-        uint8_t NUnits=code_point::NUnits(input.substr(position)[0]);
+        uint8_t NUnits = code_point::NUnits(input.substr(position)[0]);
         if(NUnits==0)
             throw gen_exception("input is not UTF-8. B");
-        if( NUnits+position>input.length() )
+        if( (NUnits+position)>input.length() )
             throw gen_exception("input is not UTF-8. A");
-        position+=NUnits;
-        new_length+=1;
+        position += NUnits;
+        new_length += 1;
     }
 
     reserve(new_length);
-    length=new_length;
+    length = new_length;
 
     position=0;
 
-    for(uint8_t i=0; i<length and position<input.length(); i++)
+    for(size_t i=0; i<length and position<input.length(); i++)
     {
-        position+=points[i].from_str(input.substr(position));
+        position += points[i].from_str(input.substr(position));
     }
 }
 
 std::string utf8_string::to_cpp_string()
 //return a utf-8 cpp string with the same content as this string
 {
-    uint8_t cpp_length=0;
-    for(uint8_t i=0; i<length; i++)
+    size_t cpp_length=0;
+    for(size_t i=0; i<length; i++)
     {
         cpp_length+=points[i].NUnits();
     }
 
     std::string ret(cpp_length, ' ');
 
-    uint8_t position=0;
-    for(uint8_t i=0; i<length; i++)
+    size_t position=0;
+    for(size_t i=0; i<length; i++)
     {
-        uint8_t NUnits=points[i].NUnits();
+        uint8_t NUnits = points[i].NUnits();
 
         switch (NUnits)
         {
             case 4:
             {
-                ret[position+3]=points[i][3];
+                ret[position+3] = points[i][3];
             }
             case 3:
             {
-                ret[position+2]=points[i][2];
+                ret[position+2] = points[i][2];
             }
             case 2:
             {
-                ret[position+1]=points[i][1];
+                ret[position+1] = points[i][1];
             }
             case 1:
             {
-                ret[position]=points[i][0];
+                ret[position] = points[i][0];
             }
         }
-        position+=NUnits;
+        position += NUnits;
     }
     return ret;
 }
 
 //size operations
-uint8_t utf8_string::get_capacity()
+size_t utf8_string::get_capacity()
 {
     return capacity;
 }
 
-uint utf8_string::get_length() const
+size_t utf8_string::get_length() const
 {
     return length;
 }
 
-void utf8_string::resize(uint8_t _capacity)
+void utf8_string::resize(size_t _capacity)
 //resizes string to _max_length. Discarding points if _max_length is smaller than current length
 {
     if(_capacity==capacity)
         return;
 
-    code_point* new_points=new code_point[_capacity];
-    uint8_t L=_capacity;
+    code_point* new_points = new code_point[_capacity];
+    size_t  L= _capacity;
     if(length<_capacity)
         L=length;
 
-    for(uint8_t i=0; i<L; i++)
+    for(size_t i=0; i<L; i++)
     {
         new_points[i]=points[i];
     }
@@ -583,22 +582,28 @@ void utf8_string::resize(uint8_t _capacity)
     points=new_points;
 }
 
-void utf8_string::reserve(uint8_t _capacity)
+void utf8_string::reserve(size_t _capacity)
 //resizes string to at least_max_length.
 {
-    if(_capacity<=capacity)
+
+    if(_capacity <= capacity)
         return;
 
-    code_point* new_points=new code_point[_capacity];
-
-    for(uint8_t i=0; i<length; i++)
+    if( _capacity < length )
     {
-        new_points[i]=points[i];
+        throw gen_exception("ERROR in utf8_string::reserve. This should not be reached");
     }
-    capacity=_capacity;
+
+    code_point* new_points = new code_point[_capacity];
+
+    for(size_t i=0; i<length; i++)
+    {
+        new_points[i] = points[i];
+    }
+    capacity = _capacity;
     if( points )
         delete[] points;
-    points=new_points;
+    points = new_points;
 }
 
 //element acsses
@@ -610,7 +615,7 @@ code_point& utf8_string::operator[] (size_t pos)
     return points[pos];
 }
 
-utf8_string utf8_string::slice(uint8_t start, uint8_t stop)
+utf8_string utf8_string::slice(size_t start, size_t stop)
 //returns a UTF8 string with codepoints between start and stop, include start. Throws gen_exception if stop is less than start
 // or stop is larger than string
 {
@@ -623,9 +628,9 @@ utf8_string utf8_string::slice(uint8_t start, uint8_t stop)
         throw gen_exception("stop is beyond length of string");
     }
 
-    uint8_t L=stop-start;
+    size_t L = stop-start;
     utf8_string ret(L);
-    for(uint8_t i=start; i<stop; i++)
+    for(size_t i = start; i<stop; i++)
     {
         ret.append(points[i]);
     }
@@ -678,13 +683,13 @@ void utf8_string::append(const char* str)
 
 void utf8_string::append(const utf8_string& data)
 {
-    uint8_t new_size=length+data.length;
+    size_t new_size = length + data.length;
     reserve(new_size);
-    for(int i=0; i<data.length; ++i)
+    for(size_t i=0; i<data.length; ++i)
     {
-        points[i+length]=data.points[i];
+        points[i+length] = data.points[i];
     }
-    length=new_size;
+    length = new_size;
 }
 
 void utf8_string::append(const code_point& data)
@@ -707,7 +712,7 @@ bool utf8_string::operator == (const utf8_string& rhs) const
 {
     if(length==rhs.length)
     {
-        for(uint8_t i=0; i<length; i++)
+        for(size_t i=0; i<length; i++)
         {
             if(not (rhs[i]==points[i]) )
                 return false;
@@ -724,7 +729,7 @@ utf8_string& utf8_string::operator=(const utf8_string& other)
     {
         reserve(other.length);
 
-        for( int i=0; i<other.length; i++ )
+        for( size_t i=0; i<other.length; i++ )
         {
             points[i]=other[i];
         }
@@ -763,8 +768,8 @@ std::ostream& csu::operator<<(std::ostream& os, const utf8_string& str)
 
 utf8_string csu::operator+(const utf8_string& LHS, const utf8_string& RHS)
 {
-    utf8_string ret=LHS;
-    ret.append(RHS);
+    utf8_string ret( LHS );
+    ret.append( RHS );
     return ret;
 }
 

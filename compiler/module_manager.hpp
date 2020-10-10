@@ -29,12 +29,26 @@ class module_manager
 {
 private:
     make_cyth_parser cyth_parser_generator;
-    std::map<std::string, module_AST_ptr> parsed_modules;
+
+    std::list< std::string > module_fnames_to_parse;
+    std::map<std::string, module_AST_ptr> parsed_modules; // maybe this shouldn't be a map?
 
 public:
     module_manager(bool do_parserTable_IO=true);
 
+    void add_module_fname_to_parse(std::string module_fname);
+
     module_AST_ptr parse_module(std::string module_fname, bool reporting=false);
+
+    void parse_all_modules( bool reporting=false );
+
+    std::list< module_AST_ptr> get_module_dependency_order();
+
+    module_AST_ptr get_module( std::string file_name );
+
+    bool build_module(module_AST_ptr module);
+    
+    bool compile_and_link();
 };
 
 #endif
