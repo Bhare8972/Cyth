@@ -60,6 +60,7 @@ void module_AST_node::add_AST_node(AST_node_ptr new_AST_element)
 
 void module_AST_node::apply_visitor(AST_visitor_base* visitor)
 {
+
     visitor->module_down( this );
     visitor->ASTnode_down( this );
 
@@ -79,7 +80,6 @@ void module_AST_node::apply_visitor(AST_visitor_base* visitor)
 
     visitor->ASTnode_up( this );
     visitor->module_up( this, visitor_children );
-
 
 }
 
@@ -133,6 +133,18 @@ void module_AST_node::find_main_func()
     }
 }
 
+module_AST_node::compiler_command::compiler_command( string _command, location_span _loc )
+{
+    command = _command;
+    loc = _loc;
+}
+
+void module_AST_node::add_CompilerCommand( utf8_string _command, location_span _loc )
+{
+    compiler_comands.emplace_back( _command.to_cpp_string(), _loc );
+}
+
+
 
 ///// IMPORTS /////
 
@@ -179,12 +191,55 @@ void import_C_AST_node::apply_visitor(AST_visitor_base* visitor)
     visitor->allImports_up( this );
 }
 
+//cyth imports
+import_cyth_AST_node::import_cyth_AST_node(csu::utf8_string _file_name, utf8_string _import_name, location_span _loc)
+{
+    import_name = _import_name;
+    usage_name = _import_name;
+    loc = _loc;
+    file_name = _file_name;
+
+    //type = nullptr;
+    //variable = nullptr;
+    //variable_type = nullptr;
+}
+
+import_cyth_AST_node::import_cyth_AST_node(utf8_string _import_name, location_span _loc)
+{
+    import_name = _import_name;
+    usage_name = _import_name;
+    loc = _loc;
+
+    //type = nullptr;
+    //variable = nullptr;
+    //variable_type = nullptr;
+}
+
+void import_cyth_AST_node::set_usage_name(utf8_string _usage_name)
+{
+    usage_name = _usage_name;
+}
+
+
+void import_cyth_AST_node::apply_visitor(AST_visitor_base* visitor)
+{
+    visitor->allImports_down( this );
+    visitor->CythImports_down( this );
+    visitor->ASTnode_down( this );
+
+    if( not visitor->apply_to_children() ){ return; }
+
+    visitor->ASTnode_up( this );
+    visitor->CythImports_up( this );
+    visitor->allImports_up( this );
+}
+
 
 /// CLASSES ///
 
+// var definition
 General_VarDefinition::General_VarDefinition()
 {
-    var_type = nullptr;
     variable_symbol = nullptr;
 }
 
@@ -199,6 +254,7 @@ class_varDefinition_AST_node::class_varDefinition_AST_node(varType_ASTrepr_ptr _
 void class_varDefinition_AST_node::apply_visitor(AST_visitor_base* visitor)
 {
     visitor->ClassVarDef_down( this );
+    visitor->typed_VarDef_down(this);
     visitor->generic_VarDef_down(this);
     visitor->statement_down( this );
     visitor->ASTnode_down( this );
@@ -220,19 +276,56 @@ void class_varDefinition_AST_node::apply_visitor(AST_visitor_base* visitor)
 
     visitor->ASTnode_up( this );
     visitor->statement_up( this );
-    visitor->generic_VarDef_up(this, varType_visitor);
+    visitor->generic_VarDef_up(this);
+    visitor->typed_VarDef_up(this, varType_visitor);
     visitor->ClassVarDef_up( this, varType_visitor, default_value_visitor);
 }
 
+//inheritance list
+void inheritanceList_AST_node::add_item(csu::utf8_string &item, csu::location_span &_loc)
+{
+    if( class_IDs.size() == 0 )
+    {
+        loc = _loc;
+    }
+    else
+    {
+        loc = loc + _loc;
+    }
+
+    class_IDs.emplace_back( item );
+}
 
 
+void inheritanceList_AST_node::apply_visitor(AST_visitor_base* visitor)
+{
+    visitor->inheritanceList_down( this );
+    visitor->ASTnode_down( this );
 
-class_AST_node::class_AST_node(csu::utf8_string _name, csu::location_span _loc)
+    if( not visitor->apply_to_children() ){ return; }
+
+    visitor->ASTnode_up( this );
+    visitor->inheritanceList_up( this );
+}
+
+// actual class
+class_AST_node::class_AST_node(csu::utf8_string _name, inheritanceList_AST_ptr _inheritanceList, csu::location_span _loc)
 {
     name = _name;
     loc = _loc;
     type_ptr = nullptr;
     inner_symbol_table = nullptr;
+
+    inheritanceList = _inheritanceList;
+
+    write_default_constructor = false;
+    default_constructor_overload = nullptr;
+
+    write_default_deconstructor = false;
+    default_destructor_overload = nullptr;
+
+    write_selfCopy_constructor = false;
+    default_CopyConstructor_overload = nullptr;
 }
 
 void class_AST_node::add_var_def(ClassVarDef_AST_ptr new_variable_definition)
@@ -253,7 +346,9 @@ void class_AST_node::apply_visitor(AST_visitor_base* visitor)
     visitor->ASTnode_down( this );
 
     if( not visitor->apply_to_children() ){ return; }
-    visitor->initiate_children( var_definitions.size() + method_definitions.size() );
+
+    bool has_inheritance = (inheritanceList!=nullptr);
+    visitor->initiate_children( var_definitions.size() + method_definitions.size() + has_inheritance);
 
     int i = 0;
     list<AST_visitor_base*> var_def_visitor_children;
@@ -274,14 +369,78 @@ void class_AST_node::apply_visitor(AST_visitor_base* visitor)
         i += 1;
     }
 
+    AST_visitor_base* inheritance_list_child = nullptr;
+    if( has_inheritance )
+    {
+        inheritance_list_child = visitor->get_child(i) ;
+        inheritanceList->apply_visitor( inheritance_list_child );
+    }
+
     visitor->ASTnode_up( this );
-    visitor->ClassDef_up( this, var_def_visitor_children, method_def_visitor_children );
+    visitor->ClassDef_up( this, var_def_visitor_children, method_def_visitor_children, inheritance_list_child );
 }
 
 
 
+// construct block
+construct_AST_node::construct_AST_node(csu::location_span initial_loc)
+{
+    loc = initial_loc;
+}
+
+void construct_AST_node::add(constructElement_AST_ptr _newElement)
+{
+    contents.push_back( _newElement );
+}
+
+void construct_AST_node::apply_visitor(AST_visitor_base* visitor)
+{
+    visitor->constructBlock_down( this );
+    visitor->ASTnode_down( this );
+
+    if( not visitor->apply_to_children() ){ return; }
+    visitor->initiate_children( contents.size() );
+
+    int i = 0;
+    std::list<AST_visitor_base*> visitor_children;
+
+    for(auto child : contents)
+    {
+        AST_visitor_base* child_visitor = visitor->get_child(i) ;
+        visitor_children.push_back( child_visitor );
+        child->apply_visitor( child_visitor );
+        i += 1;
+    }
+
+    visitor->ASTnode_up( this );
+    visitor->constructBlock_up( this, visitor_children );
+}
 
 
+
+constructElement_AST_node::constructElement_AST_node(expression_AST_ptr _expression,  argumentList_AST_ptr _argument_list, csu::location_span initial_loc)
+{
+    loc = initial_loc;
+    expression = _expression;
+    argument_list = _argument_list;
+}
+
+void constructElement_AST_node::apply_visitor(AST_visitor_base* visitor)
+{
+    visitor->constructElement_down( this );
+    visitor->ASTnode_down( this );
+
+    if( not visitor->apply_to_children() ){ return; }
+
+    visitor->initiate_children( 2 );
+    AST_visitor_base* ex_child = visitor->get_child(0) ;
+    expression->apply_visitor( ex_child );
+    AST_visitor_base* args_child = visitor->get_child(1) ;
+    argument_list->apply_visitor( args_child );
+
+    visitor->ASTnode_up( this );
+    visitor->constructElement_up( this, ex_child, args_child );
+}
 
 
 /// FUNCTIONS ////
@@ -394,6 +553,7 @@ void function_AST_node::apply_visitor(AST_visitor_base* visitor)
     visitor->ASTnode_up( this );
     visitor->callableDef_up( this, paramList_child );
     visitor->funcDef_up( this, returnType_child, paramList_child, funcBody_child );
+
 }
 
 void function_AST_node::notify_return_type()
@@ -492,6 +652,7 @@ void function_parameter_list::required_params::add_typed_param( varType_ASTrepr_
 
 void function_parameter_list::required_params::apply_visitor(AST_visitor_base* visitor)
 {
+
     visitor->reqParams_down( this );
     visitor->baseParams_down( this );
     visitor->ASTnode_down( this );
@@ -513,6 +674,7 @@ void function_parameter_list::required_params::apply_visitor(AST_visitor_base* v
     visitor->ASTnode_up( this );
     visitor->baseParams_up( this, visitor_children  );
     visitor->reqParams_up( this, visitor_children );
+
 }
 
 function_parameter_list::defaulted_params::defaulted_params( location_span _loc )
@@ -537,6 +699,7 @@ void function_parameter_list::defaulted_params::add_typed_param(  varType_ASTrep
 
 void function_parameter_list::defaulted_params::apply_visitor(AST_visitor_base* visitor)
 {
+
     visitor->defaultParams_down( this );
     visitor->baseParams_down( this );
     visitor->ASTnode_down( this );
@@ -567,6 +730,7 @@ void function_parameter_list::defaulted_params::apply_visitor(AST_visitor_base* 
     visitor->ASTnode_up( this );
     visitor->baseParams_up( this, param_name_visitors  );
     visitor->defaultParams_up( this, param_name_visitors, default_exp_visitors );
+
 }
 
 
@@ -610,61 +774,88 @@ void call_argument_list::apply_visitor(AST_visitor_base* visitor)
     visitor->callArguments_up( this, unArgs_child, namedArgs_child );
 }
 
-callArg_types_ptr call_argument_list::get_argument_info()
+int call_argument_list::num_unnamed()
 {
-   auto argInfo = make_shared<funcCall_argument_info>();
-
     if( unnamed_argument_list )
     {
-        argInfo->unnamed_arguments.reserve( unnamed_argument_list->arguments.size() );
-        for(auto& exp : unnamed_argument_list->arguments)
-        {
-            argInfo->unnamed_arguments.push_back( exp->expression_return_type );
-        }
+        return unnamed_argument_list->arguments.size();
     }
+    else
+    {
+        return 0;
+    }
+}
 
+int call_argument_list::num_named()
+{
     if( named_argument_list )
     {
-        argInfo->named_arguments.reserve( named_argument_list->arguments.size() );
-        argInfo->argument_names.reserve( named_argument_list->arguments.size() );
-
-        auto nmd_exp_iter = named_argument_list->arguments.begin();
-        auto nmd_exp_end = named_argument_list->arguments.end();
-        auto nmd_ID_iter = named_argument_list->names.begin();
-        auto nmd_ID_end = named_argument_list->names.end();
-        for(; nmd_exp_iter != nmd_exp_end && nmd_ID_iter != nmd_ID_end; ++nmd_exp_iter, ++nmd_ID_iter)
-        {
-            argInfo->named_arguments.push_back( (*nmd_exp_iter)->expression_return_type );
-            argInfo->argument_names.push_back( *nmd_ID_iter );
-        }
+        return named_argument_list->arguments.size();
     }
+    else
+    {
+        return 0;
+    }
+}
 
-    return argInfo;
+int call_argument_list::total_size()
+{
+    return num_unnamed() + num_named();
+}
+
+expression_AST_ptr call_argument_list::unNamedExp_by_index(int i)
+{
+    int num_unnamed_ = num_unnamed();
+    if( i > num_unnamed_ )
+    {
+        throw gen_exception("i is too large in call_argument_list::unNamedExp_by_index");
+    }
+    else
+    {
+        return unnamed_argument_list->arguments[i];
+    }
+}
+
+expression_AST_ptr call_argument_list::namedExp_by_index(int i)
+{
+    int num_named_ = num_named();
+    if( i > num_named_ )
+    {
+        throw gen_exception("i is too large in call_argument_list::namedExp_by_index");
+    }
+    else
+    {
+        return named_argument_list->arguments[i];
+    }
+}
+
+utf8_string call_argument_list::namedExpName_by_index(int i)
+{
+    int num_named_ = num_named();
+    if( i > num_named_ )
+    {
+        throw gen_exception("i is too large in call_argument_list::namedExp_by_index");
+    }
+    else
+    {
+        return named_argument_list->names[i];
+    }
 }
 
 expression_AST_ptr call_argument_list::expression_from_index(int i)
 {
-    int num_unnamed = 0;
-    if(unnamed_argument_list)
-    {
-        num_unnamed = unnamed_argument_list->arguments.size();
-    }
+    int num_unnamed_ = num_unnamed();
+    int num_named_ = num_named();
 
-    int num_named = 0;
-    if(named_argument_list)
-    {
-        num_named = named_argument_list->arguments.size();
-    }
-
-    if( i < num_unnamed)
+    if( i < num_unnamed_)
     {
         auto it = unnamed_argument_list->arguments.begin();
         advance(it, i);
         return *it;
     }
-    else if( i < (num_unnamed+num_named))
+    else if( i < (num_unnamed_+num_named_))
     {
-        i -= num_unnamed;
+        i -= num_unnamed_;
         auto it = named_argument_list->arguments.begin();
         advance(it, i);
         return *it;
@@ -673,6 +864,54 @@ expression_AST_ptr call_argument_list::expression_from_index(int i)
     {
         throw gen_exception("i is too large in call_argument_list::expression_from_index");
     }
+}
+
+void call_argument_list::print(std::ostream& output)
+{
+    bool do_comma = false;
+
+    output <<"( ";
+
+    if( unnamed_argument_list )
+    {
+        for( auto exp : unnamed_argument_list->arguments )
+        {
+            if(do_comma)
+            {
+                output << ", " ;
+            }
+            else
+            {
+                do_comma = true;
+            }
+
+            output << exp->expression_return_type->definition_name ;
+        }
+    }
+
+    if( named_argument_list )
+    {
+        int num = num_named();
+        for( int i=0; i<num; ++i )
+        {
+
+            if(do_comma)
+            {
+                output << ", " ;
+            }
+            else
+            {
+                do_comma = true;
+            }
+
+            auto exp = named_argument_list->arguments[i];
+            auto name = named_argument_list->names[i];
+
+            output << name << '=' << exp->expression_return_type->definition_name;
+        }
+    }
+
+    output <<")";
 }
 
 call_argument_list::unnamed_arguments_T::unnamed_arguments_T( csu::location_span _loc )
@@ -688,6 +927,7 @@ void call_argument_list::unnamed_arguments_T::add_argument( expression_AST_ptr n
 
 void call_argument_list::unnamed_arguments_T::apply_visitor(AST_visitor_base* visitor)
 {
+
     visitor->unArguments_down( this );
     visitor->baseArguments_down( this );
     visitor->ASTnode_down( this );
@@ -708,6 +948,7 @@ void call_argument_list::unnamed_arguments_T::apply_visitor(AST_visitor_base* vi
     visitor->ASTnode_up( this );
     visitor->baseArguments_up( this, visitor_children );
     visitor->unArguments_up( this, visitor_children );
+
 }
 
 call_argument_list::named_arguments_T::named_arguments_T( csu::location_span _loc )
@@ -724,6 +965,7 @@ void call_argument_list::named_arguments_T::add_argument( csu::utf8_string& name
 
 void call_argument_list::named_arguments_T::apply_visitor(AST_visitor_base* visitor)
 {
+
     visitor->namedArguments_down( this );
     visitor->baseArguments_down( this );
     visitor->ASTnode_down( this );
@@ -744,6 +986,7 @@ void call_argument_list::named_arguments_T::apply_visitor(AST_visitor_base* visi
     visitor->ASTnode_up( this );
     visitor->baseArguments_up( this, visitor_children );
     visitor->namedArguments_up( this, visitor_children );
+
 }
 
 
@@ -785,6 +1028,7 @@ method_AST_node::method_AST_node(utf8_string _name, varType_ASTrepr_ptr _return_
 
 void method_AST_node::apply_visitor(AST_visitor_base* visitor)
 {
+
     visitor->methodDef_down( this );
     visitor->callableDef_down( this );
     visitor->ASTnode_down( this );
@@ -811,6 +1055,7 @@ void method_AST_node::apply_visitor(AST_visitor_base* visitor)
     visitor->ASTnode_up( this );
     visitor->callableDef_up( this, paramList_child );
     visitor->methodDef_up( this, returnType_child, paramList_child, funcBody_child );
+
 }
 
 void method_AST_node::notify_return_type()
@@ -891,8 +1136,9 @@ definition_statement_AST_node::definition_statement_AST_node(varType_ASTrepr_ptr
 void definition_statement_AST_node::apply_visitor(AST_visitor_base* visitor)
 {
     visitor->definitionStmt_down( this );
-    visitor->statement_down( this );
+    visitor->typed_VarDef_down( this );
     visitor->generic_VarDef_down(this);
+    visitor->statement_down( this );
     visitor->ASTnode_down( this );
 
     if( not visitor->apply_to_children() ){ return; }
@@ -903,8 +1149,45 @@ void definition_statement_AST_node::apply_visitor(AST_visitor_base* visitor)
 
     visitor->ASTnode_up( this );
     visitor->statement_up( this );
-    visitor->generic_VarDef_up(this, child);
+    visitor->generic_VarDef_up(this);
+    visitor->typed_VarDef_up( this, child);
     visitor->definitionStmt_up( this, child );
+}
+
+// definition and construction
+definitionNconstruction_statement_AST_node::definitionNconstruction_statement_AST_node(varType_ASTrepr_ptr _var_type, utf8_string _var_name, argumentList_AST_ptr _argument_list, location_span _loc)
+{
+    //type_of_statement = statement_AST_node::definition_t;
+
+    var_type = _var_type;
+    var_name = _var_name;
+    loc = _loc;
+    variable_symbol = nullptr;
+
+    argument_list = _argument_list;
+}
+
+void definitionNconstruction_statement_AST_node::apply_visitor(AST_visitor_base* visitor)
+{
+    visitor->definitionNconstructionStmt_down( this );
+    visitor->typed_VarDef_down(this);
+    visitor->generic_VarDef_down(this);
+    visitor->statement_down( this );
+    visitor->ASTnode_down( this );
+
+    if( not visitor->apply_to_children() ){ return; }
+
+    visitor->initiate_children( 2 );
+    AST_visitor_base* varType_child = visitor->get_child(0);
+    var_type->apply_visitor( varType_child );
+    AST_visitor_base* argumentList_child = visitor->get_child(1);
+    argument_list->apply_visitor( argumentList_child );
+
+    visitor->ASTnode_up( this );
+    visitor->statement_up( this );
+    visitor->generic_VarDef_up(this);
+    visitor->typed_VarDef_up( this, varType_child);
+    visitor->definitionNconstruction_up( this, varType_child,  argumentList_child);
 }
 
 // assignment
@@ -946,6 +1229,7 @@ auto_definition_statement_AST_node::auto_definition_statement_AST_node(utf8_stri
 void auto_definition_statement_AST_node::apply_visitor(AST_visitor_base* visitor)
 {
     visitor->autoDefStmt_down( this );
+    visitor->generic_VarDef_down(this);
     visitor->statement_down( this );
     visitor->ASTnode_down( this );
 
@@ -957,6 +1241,7 @@ void auto_definition_statement_AST_node::apply_visitor(AST_visitor_base* visitor
 
     visitor->ASTnode_up( this );
     visitor->statement_up( this );
+    visitor->generic_VarDef_up(this);
     visitor->autoDefStmt_up( this, child );
 }
 
@@ -1056,7 +1341,9 @@ void LHS_accessor_AST_node::apply_visitor(AST_visitor_base* visitor)
 expression_AST_node::expression_AST_node()
 {
     expression_return_type = nullptr;
-    //return_type_is_unnamed = true;
+    has_output_ownership = true;
+
+    writer = nullptr;
 }
 
 // int literal
@@ -1187,7 +1474,6 @@ functionCall_expression_AST_node::functionCall_expression_AST_node( expression_A
     loc = _loc;
     expression = _expression;
     argument_list = _argument_list;
-    function_to_write = nullptr;
 }
 
 void functionCall_expression_AST_node::apply_visitor(AST_visitor_base* visitor)
