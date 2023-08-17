@@ -16,6 +16,12 @@ limitations under the License.
 This file defines the base class for abstract syntax tree visitors, which are essentially operators on the AST
 */
 
+
+// IDEAS: make a visitor that propagates down a certain number of children (I.E. generalize AST_visitor_NoChildren)
+// make it so visitor type on children can easily change (for visitorTree) (different children have different visitor types)
+//     would then needway to easily cast back...
+//
+
 #ifndef AST_VISITOR_190310141302
 #define AST_VISITOR_190310141302
 
@@ -89,11 +95,29 @@ public:
     virtual void ClassVarDef_down( class_varDefinition_AST_node* class_var_def ){}
     virtual void definitionStmt_down(definition_statement_AST_node* defStmt){}
     virtual void definitionNconstructionStmt_down(definitionNconstruction_statement_AST_node* defStmt){}
+    virtual void definitionNassignmentStmt_down(definitionNassignment_statement_AST_node* defStmt){}
+
+
+    virtual void flowControl_down(flowControl_AST_node* controlNode){}
+    virtual void conditional_down(conditional_AST_node* condNode){}
+
+    virtual void activeCond_down(activeCond_AST_node* condNode){}
+    virtual void ifCond_down(if_AST_node* ifNode){}
+    virtual void elifCond_down(elif_AST_node* elifNode){}
+
+    virtual void else_down(else_AST_node* elifNode){}
+
+
+    virtual void loop_down(loop_AST_node* loopNode){}
+    virtual void while_down(whileLoop_AST_node* whileLoopNode){}
+    virtual void for_down(forLoop_AST_node* forLoopNode){}
+
 
     virtual void expressionStatement_down(expression_statement_AST_node* expStmt){}
     virtual void assignmentStmt_down(assignment_statement_AST_node* assignStmt){}
     virtual void autoDefStmt_down(auto_definition_statement_AST_node* autoStmt){}
     virtual void returnStatement_down(return_statement_AST_node* returnStmt){}
+    virtual void loopCntrlStatement_down(loopCntrl_statement_AST_node* cntrlStmt){}
 
     virtual void LHSReference_down(LHS_reference_AST_node* LHS_ref){}
     virtual void LHS_varRef_down(LHS_varReference* varref){}
@@ -157,11 +181,30 @@ public:
     virtual void ClassVarDef_up( class_varDefinition_AST_node* class_var_def, AST_visitor_base* varType, AST_visitor_base* default_exp){}
     virtual void definitionStmt_up(definition_statement_AST_node* defStmt, AST_visitor_base* varTypeRepr_child){}
     virtual void definitionNconstruction_up(definitionNconstruction_statement_AST_node* defStmt, AST_visitor_base* varTypeRepr_child, AST_visitor_base* argList_child){}
+    virtual void definitionNassignment_up(definitionNassignment_statement_AST_node* defStmt, AST_visitor_base* varTypeRepr_child, AST_visitor_base* exp_child){}
+
+
+    virtual void flowControl_up(flowControl_AST_node* controlNode, AST_visitor_base* Block_child){}
+    virtual void conditional_up(conditional_AST_node* condNode, AST_visitor_base* Block_child){}
+
+    virtual void activeCond_up(activeCond_AST_node* condNode, AST_visitor_base* ifExp_child, AST_visitor_base* block_child, AST_visitor_base* childConditional){}
+    virtual void ifCond_up(if_AST_node* ifNode, AST_visitor_base* ifExp_child, AST_visitor_base* block_child, AST_visitor_base* childConditional){}
+    virtual void elifCond_up(elif_AST_node* elifNode, AST_visitor_base* ifExp_child, AST_visitor_base* block_child, AST_visitor_base* childConditional){}
+
+    virtual void else_up(else_AST_node* elseNode, AST_visitor_base* block_child){}
+
+
+    virtual void loop_up(loop_AST_node* loopNode, AST_visitor_base* Block_child){}
+    virtual void while_up(whileLoop_AST_node* whileLoopNode, AST_visitor_base* whileExp_child, AST_visitor_base* Block_child){}
+    virtual void for_up(forLoop_AST_node* forLoopNode, AST_visitor_base* initialStmt_child, AST_visitor_base* updateStmt_child, AST_visitor_base* whileExp_child, AST_visitor_base* Block_child){}
+
+
 
     virtual void expressionStatement_up(expression_statement_AST_node* expStmt, AST_visitor_base* expression_child){}
     virtual void assignmentStmt_up(assignment_statement_AST_node* assignStmt, AST_visitor_base* LHS_reference_child, AST_visitor_base* expression_child){}
     virtual void autoDefStmt_up(auto_definition_statement_AST_node* autoStmt, AST_visitor_base* expression_child){}
     virtual void returnStatement_up(return_statement_AST_node* returnStmt, AST_visitor_base* expression_child){}
+    virtual void loopCntrlStatement_up(loopCntrl_statement_AST_node* cntrlStmt){}
 
     virtual void LHSReference_up(LHS_reference_AST_node* LHS_ref){}
     virtual void LHS_varRef_up(LHS_varReference* varref){}
@@ -184,10 +227,11 @@ public:
 
 // this overloads the methods so that a tree is built
 // probably the most 'normal' visitor!
+//
 class AST_visitorTree : public AST_visitor_base
 {
 protected:
-    AST_visitor_base* parent;
+    AST_visitor_base* parent; // this should be of type AST_visitorTree at least I think?
     std::vector< std::shared_ptr< AST_visitor_base > > children;
     bool children_initiated;
 
@@ -214,6 +258,9 @@ public:
     virtual std::shared_ptr< AST_visitor_base > make_child(int number)=0;
 };
 
+
+/// Revisitors, crawl down or up a previous visitor. Total basterdization of visitor
+// crawls down and up previous visitor. Does not accses parents.
 template<class visitor_type>
 class revisitor_tree : public AST_visitorTree
 {
@@ -237,6 +284,11 @@ void apply_revisitor(AST_node* applied_node, visitor_type* visitor_to_visit, rev
     revisitor->twin = visitor_to_visit;
     applied_node->apply_visitor( revisitor );
 }
+
+
+
+
+
 
 
 // This overloads the opererators so that the visitor goes down then back up the tree without generating more memory
@@ -335,11 +387,28 @@ public:
     void definitionStmt_up(definition_statement_AST_node* defStmt, AST_visitor_base* varTypeRepr_child) final {}
 
     void definitionNconstruction_up(definitionNconstruction_statement_AST_node* defStmt, AST_visitor_base* varTypeRepr_child, AST_visitor_base* argList_child) final {}
+    void definitionNassignment_up(definitionNassignment_statement_AST_node* defStmt, AST_visitor_base* varTypeRepr_child, AST_visitor_base* exp_child) final {}
+
+
+    void flowControl_up(flowControl_AST_node* controlNode, AST_visitor_base* elseBlock_child) final {}
+    void conditional_up(conditional_AST_node* condNode, AST_visitor_base* elseBlock_child) final {}
+
+    void activeCond_up(activeCond_AST_node* condNode, AST_visitor_base* ifExp_child, AST_visitor_base* block_child, AST_visitor_base* childConditional) final {}
+    void ifCond_up(if_AST_node* ifNode, AST_visitor_base* ifExp_child, AST_visitor_base* block_child, AST_visitor_base* childConditional) final {}
+    void elifCond_up(elif_AST_node* elifNode, AST_visitor_base* ifExp_child, AST_visitor_base* block_child, AST_visitor_base* childConditional) final {}
+
+    void else_up(else_AST_node* elseNode, AST_visitor_base* block_child) final {}
+
+    void loop_up(loop_AST_node* loopNode, AST_visitor_base* Block_child) final {}
+    void while_up(whileLoop_AST_node* whileLoopNode, AST_visitor_base* whileExp_child, AST_visitor_base* Block_child) final {}
+    void for_up(forLoop_AST_node* forLoopNode, AST_visitor_base* initialStmt_child, AST_visitor_base* updateStmt_child, AST_visitor_base* whileExp_child, AST_visitor_base* Block_child) final {}
+
 
     void expressionStatement_up(expression_statement_AST_node* expStmt, AST_visitor_base* expression_child) final {}
     void assignmentStmt_up(assignment_statement_AST_node* assignStmt, AST_visitor_base* LHS_reference_child, AST_visitor_base* expression_child) final {}
     void autoDefStmt_up(auto_definition_statement_AST_node* autoStmt, AST_visitor_base* expression_child) final {}
     void returnStatement_up(return_statement_AST_node* returnStmt, AST_visitor_base* expression_child) final {}
+    void loopCntrlStatement_up(loopCntrl_statement_AST_node* cntrlStmt)final {}
 
     void LHSReference_up(LHS_reference_AST_node* LHS_ref) final {}
     void LHS_varRef_up(LHS_varReference* varref) final {}
@@ -357,6 +426,12 @@ public:
     void constructElement_up(constructElement_AST_node* constructBlock, AST_visitor_base* exp_child, AST_visitor_base* argList_child) final {}
 
 };
+
+
+void apply_visitor_upwards(AST_node* node, AST_visitor_base* visitor);
+// apply visitor to this node, and then each parent upwards.
+// best when used with AST_visitor_NoChildren
+// must be applied AFTER set_symbol_table visitor. (otherwise parents is not set).
 
 
 #endif // AST_VISITOR_190310141302

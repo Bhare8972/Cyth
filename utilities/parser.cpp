@@ -871,26 +871,26 @@ void parser_generator::load_to_file()
     std::ofstream fout(parser_table_file_name.to_cpp_string(), std::ios_base::binary);
 
     //save state_table to the file
-    unsigned int num_states=state_table->size();
+    unsigned int num_states = state_table->size();
     binary_write(fout, num_states);
     for(parser_state& state : *state_table)
     {
         //save the GOTO table
-        unsigned int goto_size=state.GOTO.size();
+        unsigned int goto_size = state.GOTO.size();
         binary_write(fout, goto_size);
         for(auto& state_pair : state.GOTO)
         {
-            unsigned int first=state_pair.first;
-            unsigned int second=state_pair.second;
+            unsigned int first = state_pair.first;
+            unsigned int second = state_pair.second;
             binary_write(fout, first);
             binary_write(fout, second);
         }
         //save the action table
-        unsigned int action_size=state.ACTION.size();
+        unsigned int action_size = state.ACTION.size();
         binary_write(fout, action_size);
         for(auto& stateaction_pair : state.ACTION)
         {
-            unsigned int first=stateaction_pair.first;
+            unsigned int first = stateaction_pair.first;
             binary_write(fout, first);
             stateaction_pair.second.binary_write(fout);
         }
@@ -1209,6 +1209,7 @@ void parser_generator::generate_parser_table()
         }
     }
     log();
+//cout << 'A' << endl;
 
     ///// generate the parse table /////
     auto LR0_item_sets=LR0_itemsets(augmented_start);
@@ -1236,6 +1237,8 @@ void parser_generator::generate_parser_table()
             relavent_LR1_set->goto_table[ tokenID_set_pair.first ]=LR1_goto_set;
         }
     }
+
+//cout << "A1" << endl;
 
     //algorithm 4.62 Generate propagation table and spontanious lookaheads
     propagation_table prop_table;
@@ -1313,6 +1316,9 @@ void parser_generator::generate_parser_table()
         }
     }
 
+
+//cout << "A2" << endl;
+
     //add EOF to augmented_start production
     for(item& LR0_item : *(*LR0_item_sets.begin()))
     {
@@ -1322,6 +1328,9 @@ void parser_generator::generate_parser_table()
             LR1_item_sets[0]->append(new_item);
         }
     }
+
+
+//cout << "A3" << endl;
 
     //propagate lookahead items to form all LALR(1) items
     bool items_added=true;
@@ -1347,6 +1356,8 @@ void parser_generator::generate_parser_table()
             }
         }
     }
+
+//cout << 'B' << endl;
 
     //closure on each set of items to get the non-kernal items
     for( auto set : LR1_item_sets ) closure_LR1(set);
@@ -1480,6 +1491,9 @@ void parser_generator::generate_parser_table()
     }
 
 
+//cout << 'C' << endl;
+
+
     //log the action table
     log();
     for( unsigned int state_i=0; state_i<LR1_item_sets.size(); state_i++)
@@ -1610,12 +1624,12 @@ int parser::parse_step(bool reporting)
         }
         cout<<" Got a "<< (*term_map)[next_terminal.get_ID()]<< '.' << next_terminal.loc()<<endl;
 
-        if( reporting )
-        {
+        //if( reporting )
+        //{
             cout<<"  ERROR"<<endl<<"  STACK ";
             state_string(cout);
             cout<<endl;
-        }
+        //}
 
         //// COMENCE ERROR RECOVERY
 
@@ -1765,6 +1779,12 @@ void parser::reset_input(std::istream& _input)
 {
     reset();
     lex->set_input(_input);
+}
+
+void parser::reset_input(std::istream& _input, utf8_string& file_name)
+{
+    reset();
+    lex->set_input(_input, file_name);
 }
 
 void parser::reset()

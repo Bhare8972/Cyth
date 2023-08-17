@@ -722,6 +722,21 @@ bool utf8_string::operator == (const utf8_string& rhs) const
     return false;
 }
 
+bool utf8_string::operator == (const char* rhs) const
+//equals opperator
+{
+    utf8_string data(rhs);
+    return (*this)==data;
+}
+
+
+bool utf8_string::operator != (const char* rhs) const
+//equals opperator
+{
+    return not ((*this)==rhs);
+}
+
+
 utf8_string& utf8_string::operator=(const utf8_string& other)
 // copy assignment
 {

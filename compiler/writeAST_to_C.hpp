@@ -15,6 +15,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 
 This file defines the functions to write the AST to C. Assuming the AST has been fully processed.
+
+If this doesn't work, than your only hope is to make a sacrifice to a higher demon,
+  caus' I've no idea how this works. The simplicity of this header belies an evil complexity.
+  Not that I blame myself, writing code that writes code is not easy!!
+  (BTW, I find Bezelbub to be an reasonable demon to make deals with, but he only tells you his price AFTER the job is done!)
+     (the only problem is that you don't know if giving him good advertisement was one of his previously required costs)
 */
 
 #ifndef WRITEAST_TO_C_191101195347
@@ -27,10 +33,11 @@ This file defines the functions to write the AST to C. Assuming the AST has been
 #include "UTF8.hpp"
 #include "AST_visitor.hpp"
 #include "cyth_AST.hpp"
+#include "c_source_writer.hpp"
 
 //Next three visitors are the work horses. they write out the LHS_references, expressions and statements
 
-// this is for writing the LHS of an assignment
+// this is for assigning a RHS to a LHS. This mostly works on operating on the LHS, the RHS should be given.
 class source_LHSreference_visitor : public AST_visitor_NoChildren
 {
     // this is called solely by assignment at the moment.
@@ -44,10 +51,10 @@ private:
     class source_LHS_child : public AST_visitorTree
     {
     public:
-        std::ofstream& source_fout;
-        //csu::utf8_string LHS_C_code; // visitor assigns to this
+        Csource_out_ptr source_fout;
+        C_expression_ptr final_expression;
 
-        source_LHS_child(std::ofstream& _source_fout) :
+        source_LHS_child(Csource_out_ptr _source_fout) :
             source_fout(_source_fout)
             {
             }
@@ -59,41 +66,19 @@ private:
         void LHS_accessor_up(LHS_accessor_AST_node* LHSaccess, AST_visitor_base* LHSref_visitor) override;
     };
 
-
-    std::ofstream& source_fout;
-    csu::utf8_string RHS_C_code; // c-code that defines the RHS
-    varType_ptr RHS_type;
-    expression_AST_node* RHS_AST_node;
+    C_expression_ptr RHS_exp;
 
 public:
 
-    source_LHSreference_visitor(std::ofstream& _source_fout, expression_AST_node* _RHS_AST_node, csu::utf8_string& RHS_exp, varType_ptr _RHS_type);
+    Csource_out_ptr source_fout;
+
+    source_LHSreference_visitor(Csource_out_ptr _source_fout, C_expression_ptr _RHS_exp);
 
     // note this will NEVER call 'up' visitors!
 
     void LHS_varRef_down(LHS_varReference* varref) override;
 
     void LHS_accessor_down(LHS_accessor_AST_node* LHSaccess) override;
-};
-
-class LHSexpression_cleanup_visitor : public AST_visitorTree
-{
-
-// this is needed to call destructors on all temporary variables
-// this MUST be called on all LHS expression writers!!
-
-public:
-    std::ostream& source_fout;
-
-    LHSexpression_cleanup_visitor(std::ostream& _source_fout) :
-        source_fout(_source_fout)
-    {
-    }
-
-    std::shared_ptr< AST_visitor_base > make_child(int number) override
-    { return std::make_shared<LHSexpression_cleanup_visitor>( source_fout ); }
-
-    void LHSReference_down(LHS_reference_AST_node* LHS_ref) override;
 };
 
 
@@ -103,20 +88,26 @@ class source_expression_visitor : public AST_visitorTree
 /// write out straight-forward expressions. does not write functions, classes, or those complex thingies.
 /// this should ONLY be called on expressions.
 
+private:
+    void append_childExp_to_finalExp(); // this loops over all child expressions, and adds their final_expression to this final_expresson
+
 public:
-    std::ostream& source_fout;
-    //csu::utf8_string C_expression_code; // C expression code that returns the value of the cyth expression.
+
+    Csource_out_ptr source_fout;
+    C_expression_ptr final_expression;
 
     //Note that each cyth expresion may require multiple C statements. Thus each cyth expression may write to the file, and to expression_code
     // because 'expression_code' contains code, it MUST be used by its parent
 
 
-    source_expression_visitor(std::ostream& _source_fout) :
+    source_expression_visitor(Csource_out_ptr _source_fout) :
         source_fout(_source_fout)
     {
+        //append_childernExp_to_thisExp = true; I don't know what this is.
     }
 
     std::shared_ptr< AST_visitor_base > make_child(int number) override;
+
 
     //void callArguments_up(call_argument_list* callArgs, AST_visitor_base* unArgs_child, AST_visitor_base* namedArgs) override;
 
@@ -135,65 +126,24 @@ public:
     void functionCall_Exp_up(functionCall_expression_AST_node* funcCall, AST_visitor_base* expression_child, AST_visitor_base* arguments_child) override;
 };
 
-class expression_cleanup_visitor : public AST_visitorTree
-{
 
-// this is needed to call destructors on all temporary variables
-// this MUST be called on all expression writers!!
-
-public:
-    std::ostream& source_fout;
-
-    expression_cleanup_visitor(std::ostream& _source_fout) :
-        source_fout(_source_fout)
-    {
-    }
-
-    std::shared_ptr< AST_visitor_base > make_child(int number) override
-    { return std::make_shared<expression_cleanup_visitor>( source_fout ); }
-
-
-    void expression_down(expression_AST_node* expression) override;
-
-
-
-
-    //void callArguments_up(call_argument_list* callArgs, AST_visitor_base* unArgs_child, AST_visitor_base* namedArgs) override;
-
-    //void baseArguments_up(call_argument_list::base_arguments_T* argList, std::list<AST_visitor_base*>& visitor_children) override;
-
-    void intLiteral_up(intLiteral_expression_AST_node* intLitExp) override
-    {}
-
-    void varReferance_up(varReferance_expression_AST_node* varRefExp) override
-    {}
-
-    void ParenExpGrouping_up(ParenGrouped_expression_AST_node* parenGroupExp, AST_visitor_base* expChild_visitor) override
-    {}
-
-    void accessorExp_up(accessor_expression_AST_node* accessorExp, AST_visitor_base* expChild_visitor) override
-    {}
-
-
-// TODO: what to do here?
-    void binOperator_up(binOperator_expression_AST_node* binOprExp, AST_visitor_base* LHS_exp_visitor, AST_visitor_base* RHS_exp_visitor) override;
-
-    void functionCall_Exp_up(functionCall_expression_AST_node* funcCall, AST_visitor_base* expression_child, AST_visitor_base* arguments_child) override;
-};
 
 
 
 class source_statement_visitor : public AST_visitorTree
 {
 /// write out straight-forward statements. does not write functions, classes, or those complex thingies.
-/// can write out single statements or block of statements
+/// can write out single statements, block of statements, and flow control
+/// This will NOT automatically write out expressions. Instead, source_expression_visitor will be instaiated and run inside these methods.
 
 public:
-    std::ofstream& source_fout;
+    Csource_out_ptr source_fout;
     bool do_children;
     bool write_definitions;
 
-    source_statement_visitor(std::ofstream& _source_fout, bool _write_definitions=true);
+    C_expression_ptr expression_to_cleanup; // this is cleanedup on ASTnode_up. Also can be used to communicate expressions between _down and _up vistors
+
+    source_statement_visitor(Csource_out_ptr _source_fout, bool _write_definitions=true);
 
     bool apply_to_children() override
         { return do_children; }
@@ -201,33 +151,69 @@ public:
     std::shared_ptr< AST_visitor_base > make_child(int number) override;
 
 
-    //// things that cause this visitor to stop ////
+    /// things that cause this visitor to stop ////
     void funcDef_down(function_AST_node* funcDef) override;
-    //// "normal" things ////
 
-    void block_up(block_AST_node* block, std::list<AST_visitor_base*>& visitor_children) override;
 
+    /// "normal" things ////
+    // cleanup expression_to_cleanup if not empyt;
+    void ASTnode_up(AST_node* ASTnode) override;
+
+    // block
+    void block_up(block_AST_node* block, std::list<AST_visitor_base*>& visitor_children) override; // cleans up variables in block
+
+
+    // flow control
+    void elifCond_down(elif_AST_node* elifNode) override;
+    void activeCond_down(activeCond_AST_node* condNode) override;
+    void else_down(else_AST_node* elifNode) override;
+
+    void activeCond_up(activeCond_AST_node* condNode, AST_visitor_base* ifExp_child, AST_visitor_base* block_child, AST_visitor_base* childConditional) override;
+
+
+
+    void while_down(whileLoop_AST_node* whileLoopNode) override;
+    void while_up(whileLoop_AST_node* whileLoopNode, AST_visitor_base* whileExp_child, AST_visitor_base* Block_child) override;
+
+    void for_down(forLoop_AST_node* forLoopNode)override; // this is very complicated. So sets do_children=false, and does them itself in correct order.
+
+
+    // single statements
     void statement_up(statement_AST_node* statment) override;
 
     void expressionStatement_down(expression_statement_AST_node* expStmt) override;
 
-    void typed_VarDef_up(Typed_VarDefinition* var_def, AST_visitor_base* var_type) override;
+
+    //void typed_VarDef_up(Typed_VarDefinition* var_def, AST_visitor_base* var_type) override;
 
     void definitionStmt_up(definition_statement_AST_node* defStmt, AST_visitor_base* varTypeRepr_child) override;
 
-    void definitionNconstruction_up(definitionNconstruction_statement_AST_node* defStmt, AST_visitor_base* varTypeRepr_child, AST_visitor_base* argList_child) override;
+    void definitionNconstruction_up(definitionNconstruction_statement_AST_node* defStmt,
+                            AST_visitor_base* varTypeRepr_child, AST_visitor_base* argList_child) override;
 
-    void assignmentStmt_up(assignment_statement_AST_node* assignStmt, AST_visitor_base* LHS_reference_child, AST_visitor_base* expression_child) override;
+    void definitionNassignment_up(definitionNassignment_statement_AST_node* defStmt,
+                                    AST_visitor_base* varTypeRepr_child, AST_visitor_base* exp_child) override;
+
+
+
 
     void autoDefStmt_up(auto_definition_statement_AST_node* autoStmt, AST_visitor_base* expression_child) override;
+
+
+
+    void assignmentStmt_up(assignment_statement_AST_node* assignStmt, AST_visitor_base* LHS_reference_child, AST_visitor_base* expression_child) override;
 
     void returnStatement_down(return_statement_AST_node* returnStmt) override;
 
     void constructElement_up(constructElement_AST_node* constructBlock, AST_visitor_base* exp_child, AST_visitor_base* argList_child) override;
+
+    void loopCntrlStatement_up(loopCntrl_statement_AST_node* cntrlStmt) override;
 };
 
+class module_manager;
 
 void write_module_to_C(module_AST_ptr module);
+bool write_mainFunc_to_C(module_AST_ptr module, module_manager* mod_manager);
 
 #endif // WRITEAST_TO_C_191101195347
 

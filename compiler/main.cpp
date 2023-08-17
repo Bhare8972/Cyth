@@ -22,11 +22,12 @@ This is the entry point for the Cyth compiler
 using namespace std;
 
 
+// adding break continue
+
+//PROBLEM. what happens in writeAST_to_C.cpp ::  function_argument_acclimator  if you have nested functiopns?
 
 
-
-
-//some rules:
+/// some rules:
 //    constructors are never virtual or inherited
 //    assignment operators are virtual and inhereted, but this is dangerous!!
 //    cast_to operators are normal (can be inhereted and virtual).
@@ -35,10 +36,17 @@ using namespace std;
 //          at the moment this is checked by the callee. So the caller should just use the explicit version, and the callee will default to implicit if it is available
 //    cast_to operator should be called instead of, in same place as, copy constructions
 
+//    when converting from one type to anouther, first check copy constructor, then check cast_to. I.E. copy constructor is prefered over cast_to operator.
+//    every time the compiler does a cast, the next allowable cast type must go "down" by one. I.E. explicit casting methods should only call implicit casting methods
+//          and implicit casting methods should only call pointer casting (I THINK???)
+
+// assignment operators are automatically generated for each implicit copy constructor (should probably include explicit as well!!!)
 
 
 
-//// GENERAL FIXES /////
+
+
+/// GENERAL FIXES ///
 // fix lexor to use quotations. Fix for strings
 
 // improve C variable naming
@@ -57,8 +65,9 @@ using namespace std;
 
     // improve module-based compiler commands
     // import from different locations (need file system manager)
-
     // import module namespaces
+
+    // make so compileNlink compiles a bit more intellegently
 
 // add self var to types , then implement auto  ( I no longer remember what this means)
 
@@ -70,44 +79,63 @@ using namespace std;
 
 // IDEA: make c-void pointers a built-in type, and a macro to get cptr!!! (maybe via implicit casting?)
 
+// raw_C_pointer_reference explicit_castTo not quite right, needs to also call explicit constructor I think?
+
+// handle main function return codes
+
+
+// NOTE: langauge has problem in that send-by-ref function calls can always "cast" so it is not obvious if call is truly by-reference or not
+//    May not be a problem
+
+// function argument type in sym_table may need location?
+
+// try to fix function and method types to not include symbol name?
+
+
+// TODO: DefClassType::get_pointer handles C_expression wrong!! probablyu fine for now
+
+//should inform_moved be recursive?
+
+// need to add support for __initialize__ and __deinitialize__ functions in modules. Also need to call destructors on global memory after __deinitialize__
+
+// todo: functions like: write_parent_access, parental_write_call, and get_member_full_inheritance do not check if exp is referencable.  Is this a problem? How to fix it?
+
+// methodDef_up at 1548 need local destructor??
+// funcDef_up same?
+
+//   add compiler command to force build parser (even if no files to build), to read from file if avaialbe (default), or force read from file error if no file. Perhaps just make rebuild parser if tables older than compiled parser?
+
+// place controls by boolean passed-by-value to DOWN vistors to control if certain children are visited or not
+
+// lexer line spacing testing should give error msg on tabs
+
+// function definition loc_spans only include header, should include block
+
+// printing loc_span should only print fname once
+
+
+/// current work plan ///
+
+// currently trying to get ond_N_loop_TST to work
+
+// if, while, for loops
+
+// and/or/not
 
 
 
+ // do later:
+ // unary, and in-place operators
+ // float, double
+ // __call__ operator
 
 
-// am working on classes
 
-// assign needs to be able to be virtual!
-//need to fix assinment opperators, maybe make a default assign that is defined like now (destructor then copy construct, called VIRTuALLY), but is overridden by __assign__
-
-// inform moved
-
-// explicit copy constructors
-// class as a conversion function (as a meta-type! ??)
-
-// assign_to operator
-
-
-// funtion dectorators
-//@nonOverridable (spelling)
-
-// exceptions?
-// add binary, unary, and in-place operators (including numerics, no booleans operator!)
-
-// __call__
-
-
- //literals
-// add int, long, float, double, and bool
-
-// need library!!
-
-//boolean operators
-
-// if, while and for loops
 
 // add accses and iterator operators, and slice built-in
+// void_ptr?
 // add string
+
 
 // exceptions
 // add var
@@ -121,54 +149,65 @@ using namespace std;
     // macros
     // decorators
 
+// funtion dectorators
+//@nonOverridable (spelling)
+
+// special class types. unique, small, etc....
+
+
+
+
+// SOME DOCS:
+// compiler commnads:
+// !!!link <object file>....
+// !!!command <system command....>  (NOTE: command should return 0 on succsesful exit)
+// !!!compileNlink <C_source_file....>
 
 
 int main(int argc, char *argv[])
 {
-    module_manager cyth_module_manager(false);
+    cmmnd_line_ptr commands;
 
-    if(argc == 2)
+    try
     {
-        string fname = argv[1];
-//        cout<<"opening: "<<fname<<endl;
-//        auto new_module = cyth_module_manager.parse_module(fname, false);
-//
-//        if(new_module)
-//        {
-//            cout<< "writing module: '" << fname << "' to cpp." << endl;
-//            write_module_to_C(new_module, fname);
-//        }
-//        else
-//        {
-//        }
+        commands = make_shared<command_line_options>(argc, argv);
+    }
+    catch (TCLAP::ArgException &e)  // catch any exceptions
+	{
+	    cout << "error: " << e.error() << " for arg " << e.argId() << endl;
+	    return 1;
+    }
 
-        cyth_module_manager.add_module_fname_to_parse( fname );
-        cyth_module_manager.parse_all_modules( );
+    module_manager cyth_module_manager(commands, true);
 
-        auto sorted_modules = cyth_module_manager.get_module_dependency_order();
 
-        for(auto module : sorted_modules)
+    for( auto& module_fname : commands->get_input_files() )
+    {
+        cyth_module_manager.add_module_fname_to_parse( module_fname );
+    }
+
+    cyth_module_manager.parse_all_modules( );
+    auto sorted_modules = cyth_module_manager.get_module_dependency_order();
+
+    for(auto module : sorted_modules)
+    {
+        if( not cyth_module_manager.build_module( module ) )
         {
-            if( not cyth_module_manager.build_module( module ) )
-            {
-                cout << "build unsuccessful. CLOSING!" << endl;
-                return 1;
-            }
-        }
-
-        if( not cyth_module_manager.compile_and_link() )
-        {
-            cout << "compiling or linking unsuccessful" << endl;
+            cout << "build unsuccessful. CLOSING!" << endl;
             return 1;
         }
-
-        cout<<"DONE!"<<endl;
     }
-    else
+
+
+
+    if( not cyth_module_manager.compile_and_link() )
     {
-        cout<<"You're a dope."<<endl;
+        cout << "compiling or linking unsuccessful" << endl;
         return 1;
     }
 
+
+
+    cout<<"DONE!"<<endl;
     return 0;
 }

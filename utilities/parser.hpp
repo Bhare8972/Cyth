@@ -578,6 +578,7 @@ public:
 
     //void reset_input(utf8_string& file_name);
     void reset_input(std::istream& _input);
+    void reset_input(std::istream& _input, utf8_string& file_name);
     void reset();
 
 };

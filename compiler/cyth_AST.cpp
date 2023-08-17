@@ -33,9 +33,23 @@ AST_node::AST_node()
 {
     symbol_table = 0;
     verification_state = -1;
+    parent_node = nullptr;
 }
 
 void AST_node::apply_visitor(AST_visitor_base* visitor)
+{
+    try
+    {
+        apply_visitor_inner( visitor );
+    }
+    catch(...)
+    {
+        cout << "exception in visitor to " << AST_node_name() << " at " << loc << endl;
+        throw;
+    }
+}
+
+void AST_node::apply_visitor_inner(AST_visitor_base* visitor)
 {
     throw "not implemented";
 }
@@ -58,7 +72,7 @@ void module_AST_node::add_AST_node(AST_node_ptr new_AST_element)
     loc = loc + new_AST_element->loc;
 }
 
-void module_AST_node::apply_visitor(AST_visitor_base* visitor)
+void module_AST_node::apply_visitor_inner(AST_visitor_base* visitor)
 {
 
     visitor->module_down( this );
@@ -78,8 +92,8 @@ void module_AST_node::apply_visitor(AST_visitor_base* visitor)
         i ++;
     }
 
-    visitor->ASTnode_up( this );
     visitor->module_up( this, visitor_children );
+    visitor->ASTnode_up( this );
 
 }
 
@@ -154,7 +168,7 @@ import_C_AST_node::import_C_AST_node(csu::utf8_string _file_name, utf8_string _i
     import_name = _import_name;
     usage_name = _import_name;
     loc = _loc;
-    file_name = _file_name;
+    import_file_name = _file_name;
 
     type = nullptr;
     variable = nullptr;
@@ -178,42 +192,42 @@ void import_C_AST_node::set_usage_name(utf8_string _usage_name)
 }
 
 
-void import_C_AST_node::apply_visitor(AST_visitor_base* visitor)
+void import_C_AST_node::apply_visitor_inner(AST_visitor_base* visitor)
 {
-    visitor->allImports_down( this );
     visitor->cImports_down( this );
+    visitor->allImports_down( this );
     visitor->ASTnode_down( this );
 
     if( not visitor->apply_to_children() ){ return; }
 
-    visitor->ASTnode_up( this );
     visitor->cImports_up( this );
     visitor->allImports_up( this );
+    visitor->ASTnode_up( this );
 }
 
 //cyth imports
-import_cyth_AST_node::import_cyth_AST_node(csu::utf8_string _file_name, utf8_string _import_name, location_span _loc)
+import_cyth_AST_node::import_cyth_AST_node(csu::utf8_string _import_module_string, utf8_string _import_name, location_span _loc)
 {
     import_name = _import_name;
     usage_name = _import_name;
     loc = _loc;
-    file_name = _file_name;
+    import_module_string = _import_module_string;
 
     //type = nullptr;
     //variable = nullptr;
     //variable_type = nullptr;
 }
 
-import_cyth_AST_node::import_cyth_AST_node(utf8_string _import_name, location_span _loc)
-{
-    import_name = _import_name;
-    usage_name = _import_name;
-    loc = _loc;
-
-    //type = nullptr;
-    //variable = nullptr;
-    //variable_type = nullptr;
-}
+//import_cyth_AST_node::import_cyth_AST_node(utf8_string _import_name, location_span _loc)
+//{
+//    import_name = _import_name;
+//    usage_name = _import_name;
+//    loc = _loc;
+//
+//    //type = nullptr;
+//    //variable = nullptr;
+//    //variable_type = nullptr;
+//}
 
 void import_cyth_AST_node::set_usage_name(utf8_string _usage_name)
 {
@@ -221,17 +235,17 @@ void import_cyth_AST_node::set_usage_name(utf8_string _usage_name)
 }
 
 
-void import_cyth_AST_node::apply_visitor(AST_visitor_base* visitor)
+void import_cyth_AST_node::apply_visitor_inner(AST_visitor_base* visitor)
 {
-    visitor->allImports_down( this );
     visitor->CythImports_down( this );
+    visitor->allImports_down( this );
     visitor->ASTnode_down( this );
 
     if( not visitor->apply_to_children() ){ return; }
 
-    visitor->ASTnode_up( this );
     visitor->CythImports_up( this );
     visitor->allImports_up( this );
+    visitor->ASTnode_up( this );
 }
 
 
@@ -251,7 +265,16 @@ class_varDefinition_AST_node::class_varDefinition_AST_node(varType_ASTrepr_ptr _
     default_value = nullptr;
 }
 
-void class_varDefinition_AST_node::apply_visitor(AST_visitor_base* visitor)
+
+class_varDefinition_AST_node::class_varDefinition_AST_node(varType_ASTrepr_ptr _var_type, csu::utf8_string _var_name, expression_AST_ptr _default_value, csu::location_span _loc)
+{
+    var_type = _var_type;
+    var_name = _var_name;
+    loc = _loc;
+    default_value = _default_value;
+}
+
+void class_varDefinition_AST_node::apply_visitor_inner(AST_visitor_base* visitor)
 {
     visitor->ClassVarDef_down( this );
     visitor->typed_VarDef_down(this);
@@ -274,11 +297,12 @@ void class_varDefinition_AST_node::apply_visitor(AST_visitor_base* visitor)
         default_value->apply_visitor( default_value_visitor );
     }
 
-    visitor->ASTnode_up( this );
-    visitor->statement_up( this );
-    visitor->generic_VarDef_up(this);
-    visitor->typed_VarDef_up(this, varType_visitor);
+
     visitor->ClassVarDef_up( this, varType_visitor, default_value_visitor);
+    visitor->typed_VarDef_up(this, varType_visitor);
+    visitor->generic_VarDef_up(this);
+    visitor->statement_up( this );
+    visitor->ASTnode_up( this );
 }
 
 //inheritance list
@@ -297,15 +321,15 @@ void inheritanceList_AST_node::add_item(csu::utf8_string &item, csu::location_sp
 }
 
 
-void inheritanceList_AST_node::apply_visitor(AST_visitor_base* visitor)
+void inheritanceList_AST_node::apply_visitor_inner(AST_visitor_base* visitor)
 {
     visitor->inheritanceList_down( this );
     visitor->ASTnode_down( this );
 
     if( not visitor->apply_to_children() ){ return; }
 
-    visitor->ASTnode_up( this );
     visitor->inheritanceList_up( this );
+    visitor->ASTnode_up( this );
 }
 
 // actual class
@@ -340,7 +364,7 @@ void class_AST_node::add_method_def(method_AST_ptr new_method_definition)
     method_definitions.push_back( new_method_definition );
 }
 
-void class_AST_node::apply_visitor(AST_visitor_base* visitor)
+void class_AST_node::apply_visitor_inner(AST_visitor_base* visitor)
 {
     visitor->ClassDef_down( this );
     visitor->ASTnode_down( this );
@@ -376,8 +400,8 @@ void class_AST_node::apply_visitor(AST_visitor_base* visitor)
         inheritanceList->apply_visitor( inheritance_list_child );
     }
 
-    visitor->ASTnode_up( this );
     visitor->ClassDef_up( this, var_def_visitor_children, method_def_visitor_children, inheritance_list_child );
+    visitor->ASTnode_up( this );
 }
 
 
@@ -393,7 +417,7 @@ void construct_AST_node::add(constructElement_AST_ptr _newElement)
     contents.push_back( _newElement );
 }
 
-void construct_AST_node::apply_visitor(AST_visitor_base* visitor)
+void construct_AST_node::apply_visitor_inner(AST_visitor_base* visitor)
 {
     visitor->constructBlock_down( this );
     visitor->ASTnode_down( this );
@@ -412,8 +436,8 @@ void construct_AST_node::apply_visitor(AST_visitor_base* visitor)
         i += 1;
     }
 
-    visitor->ASTnode_up( this );
     visitor->constructBlock_up( this, visitor_children );
+    visitor->ASTnode_up( this );
 }
 
 
@@ -425,7 +449,7 @@ constructElement_AST_node::constructElement_AST_node(expression_AST_ptr _express
     argument_list = _argument_list;
 }
 
-void constructElement_AST_node::apply_visitor(AST_visitor_base* visitor)
+void constructElement_AST_node::apply_visitor_inner(AST_visitor_base* visitor)
 {
     visitor->constructElement_down( this );
     visitor->ASTnode_down( this );
@@ -438,8 +462,8 @@ void constructElement_AST_node::apply_visitor(AST_visitor_base* visitor)
     AST_visitor_base* args_child = visitor->get_child(1) ;
     argument_list->apply_visitor( args_child );
 
-    visitor->ASTnode_up( this );
     visitor->constructElement_up( this, ex_child, args_child );
+    visitor->ASTnode_up( this );
 }
 
 
@@ -457,7 +481,7 @@ void block_AST_node::add_AST_node(AST_node_ptr new_AST_element, location_span _l
     loc = loc + _loc;
 }
 
-void block_AST_node::apply_visitor(AST_visitor_base* visitor)
+void block_AST_node::apply_visitor_inner(AST_visitor_base* visitor)
 {
     visitor->block_down( this );
     visitor->ASTnode_down( this );
@@ -476,8 +500,8 @@ void block_AST_node::apply_visitor(AST_visitor_base* visitor)
         i += 1;
     }
 
-    visitor->ASTnode_up( this );
     visitor->block_up( this, visitor_children );
+    visitor->ASTnode_up( this );
 }
 
 // all callable definitions
@@ -525,7 +549,7 @@ function_AST_node::function_AST_node(utf8_string _name, varType_ASTrepr_ptr _ret
     inner_symbol_table = nullptr;
 }
 
-void function_AST_node::apply_visitor(AST_visitor_base* visitor)
+void function_AST_node::apply_visitor_inner(AST_visitor_base* visitor)
 {
     visitor->funcDef_down( this );
     visitor->callableDef_down( this );
@@ -550,10 +574,9 @@ void function_AST_node::apply_visitor(AST_visitor_base* visitor)
     AST_visitor_base* funcBody_child = visitor->get_child(1+i) ;
     block_AST->apply_visitor( funcBody_child );
 
-    visitor->ASTnode_up( this );
-    visitor->callableDef_up( this, paramList_child );
     visitor->funcDef_up( this, returnType_child, paramList_child, funcBody_child );
-
+    visitor->callableDef_up( this, paramList_child );
+    visitor->ASTnode_up( this );
 }
 
 void function_AST_node::notify_return_type()
@@ -601,7 +624,7 @@ func_param_ptr function_parameter_list::get_parameter_info()
     return paramInfo;
 }
 
-void function_parameter_list::apply_visitor(AST_visitor_base* visitor)
+void function_parameter_list::apply_visitor_inner(AST_visitor_base* visitor)
 {
     visitor->funcParams_down( this );
     visitor->ASTnode_down( this );
@@ -629,8 +652,8 @@ void function_parameter_list::apply_visitor(AST_visitor_base* visitor)
         defaulted_list->apply_visitor( defaultList_child );
     }
 
-    visitor->ASTnode_up( this );
     visitor->funcParams_up( this, reqList_child, defaultList_child );
+    visitor->ASTnode_up( this );
 }
 
 function_parameter_list::required_params::required_params( location_span _loc )
@@ -650,7 +673,7 @@ void function_parameter_list::required_params::add_typed_param( varType_ASTrepr_
     new_params.var_type_ASTnode = _var_type;
 }
 
-void function_parameter_list::required_params::apply_visitor(AST_visitor_base* visitor)
+void function_parameter_list::required_params::apply_visitor_inner(AST_visitor_base* visitor)
 {
 
     visitor->reqParams_down( this );
@@ -671,9 +694,9 @@ void function_parameter_list::required_params::apply_visitor(AST_visitor_base* v
         i += 1;
     }
 
-    visitor->ASTnode_up( this );
-    visitor->baseParams_up( this, visitor_children  );
     visitor->reqParams_up( this, visitor_children );
+    visitor->baseParams_up( this, visitor_children  );
+    visitor->ASTnode_up( this );
 
 }
 
@@ -697,7 +720,7 @@ void function_parameter_list::defaulted_params::add_typed_param(  varType_ASTrep
     parameter_defaults.push_back( default_exp );
 }
 
-void function_parameter_list::defaulted_params::apply_visitor(AST_visitor_base* visitor)
+void function_parameter_list::defaulted_params::apply_visitor_inner(AST_visitor_base* visitor)
 {
 
     visitor->defaultParams_down( this );
@@ -727,10 +750,9 @@ void function_parameter_list::defaulted_params::apply_visitor(AST_visitor_base* 
         ++ expr_iter;
     }
 
-    visitor->ASTnode_up( this );
-    visitor->baseParams_up( this, param_name_visitors  );
     visitor->defaultParams_up( this, param_name_visitors, default_exp_visitors );
-
+    visitor->baseParams_up( this, param_name_visitors  );
+    visitor->ASTnode_up( this );
 }
 
 
@@ -742,7 +764,7 @@ call_argument_list::call_argument_list(csu::location_span _loc, un_arguments_ptr
     named_argument_list = _named_list;
 }
 
-void call_argument_list::apply_visitor(AST_visitor_base* visitor)
+void call_argument_list::apply_visitor_inner(AST_visitor_base* visitor)
 {
     visitor->callArguments_down( this );
     visitor->ASTnode_down( this );
@@ -770,8 +792,8 @@ void call_argument_list::apply_visitor(AST_visitor_base* visitor)
         named_argument_list->apply_visitor( namedArgs_child );
     }
 
-    visitor->ASTnode_up( this );
     visitor->callArguments_up( this, unArgs_child, namedArgs_child );
+    visitor->ASTnode_up( this );
 }
 
 int call_argument_list::num_unnamed()
@@ -914,6 +936,28 @@ void call_argument_list::print(std::ostream& output)
     output <<")";
 }
 
+function_argument_types_ptr call_argument_list::get_argument_types()
+{
+    auto out = make_shared<function_argument_types>();
+    int num = num_unnamed() ;
+    out->unnamed_argument_types.reserve( num );
+    for(int i=0; i< num; i++)
+    {
+        out->unnamed_argument_types.push_back( unNamedExp_by_index(i)->expression_return_type );
+    }
+
+    num = num_named() ;
+    out->named_argument_names.reserve( num );
+    out->named_argument_types.reserve( num );
+    for(int i=0; i< num; i++)
+    {
+        out->named_argument_types.push_back( namedExp_by_index(i)->expression_return_type );
+        out->named_argument_names.push_back( namedExpName_by_index(i) );
+    }
+
+    return out;
+}
+
 call_argument_list::unnamed_arguments_T::unnamed_arguments_T( csu::location_span _loc )
 {
     loc = _loc;
@@ -925,7 +969,7 @@ void call_argument_list::unnamed_arguments_T::add_argument( expression_AST_ptr n
     arguments.push_back(new_argument);
 }
 
-void call_argument_list::unnamed_arguments_T::apply_visitor(AST_visitor_base* visitor)
+void call_argument_list::unnamed_arguments_T::apply_visitor_inner(AST_visitor_base* visitor)
 {
 
     visitor->unArguments_down( this );
@@ -945,9 +989,9 @@ void call_argument_list::unnamed_arguments_T::apply_visitor(AST_visitor_base* vi
         i += 1;
     }
 
-    visitor->ASTnode_up( this );
-    visitor->baseArguments_up( this, visitor_children );
     visitor->unArguments_up( this, visitor_children );
+    visitor->baseArguments_up( this, visitor_children  );
+    visitor->ASTnode_up( this );
 
 }
 
@@ -963,7 +1007,7 @@ void call_argument_list::named_arguments_T::add_argument( csu::utf8_string& name
     names.push_back(name);
 }
 
-void call_argument_list::named_arguments_T::apply_visitor(AST_visitor_base* visitor)
+void call_argument_list::named_arguments_T::apply_visitor_inner(AST_visitor_base* visitor)
 {
 
     visitor->namedArguments_down( this );
@@ -983,11 +1027,13 @@ void call_argument_list::named_arguments_T::apply_visitor(AST_visitor_base* visi
         i += 1;
     }
 
-    visitor->ASTnode_up( this );
-    visitor->baseArguments_up( this, visitor_children );
     visitor->namedArguments_up( this, visitor_children );
+    visitor->baseArguments_up( this, visitor_children );
+    visitor->ASTnode_up( this );
 
 }
+
+
 
 
 
@@ -1026,7 +1072,7 @@ method_AST_node::method_AST_node(utf8_string _name, varType_ASTrepr_ptr _return_
     inner_symbol_table = nullptr;
 }
 
-void method_AST_node::apply_visitor(AST_visitor_base* visitor)
+void method_AST_node::apply_visitor_inner(AST_visitor_base* visitor)
 {
 
     visitor->methodDef_down( this );
@@ -1052,9 +1098,9 @@ void method_AST_node::apply_visitor(AST_visitor_base* visitor)
     AST_visitor_base* funcBody_child = visitor->get_child(1+have_return_node) ;
     block_AST->apply_visitor( funcBody_child );
 
-    visitor->ASTnode_up( this );
-    visitor->callableDef_up( this, paramList_child );
     visitor->methodDef_up( this, returnType_child, paramList_child, funcBody_child );
+    visitor->callableDef_up( this, paramList_child );
+    visitor->ASTnode_up( this );
 
 }
 
@@ -1078,16 +1124,241 @@ varType_ASTrepr_node::varType_ASTrepr_node(utf8_string _name, location_span _loc
     resolved_type = nullptr;
 }
 
-void varType_ASTrepr_node::apply_visitor(AST_visitor_base* visitor)
+void varType_ASTrepr_node::apply_visitor_inner(AST_visitor_base* visitor)
 {
     visitor->varTypeRepr_down( this );
     visitor->ASTnode_down( this );
 
     if( not visitor->apply_to_children() ){ return; }
 
-    visitor->ASTnode_up( this );
     visitor->varTypeRepr_up( this );
+    visitor->ASTnode_up( this );
 
+}
+
+
+
+
+/// conditionals ///
+activeCond_AST_node::activeCond_AST_node(expression_AST_ptr _if_expression, block_AST_ptr _block_AST, conditional_AST_ptr _child_conditional)
+{
+    block_AST = _block_AST;
+    inner_symbol_table = nullptr;
+
+    if_expression = _if_expression;
+    child_conditional = _child_conditional;
+}
+
+//IF
+if_AST_node::if_AST_node(expression_AST_ptr _if_expression, block_AST_ptr block_AST, conditional_AST_ptr _child_conditional, location_span _loc ) :
+    activeCond_AST_node(_if_expression, block_AST, _child_conditional)
+{
+    loc = _loc;
+    verification_state = -1;
+    symbol_table = nullptr;
+}
+
+void if_AST_node::apply_visitor_inner(AST_visitor_base* visitor)
+{
+    visitor->ifCond_down( this );
+    visitor->activeCond_down( this );
+    visitor->conditional_down( this );
+    visitor->flowControl_down( this );
+    visitor->ASTnode_down( this );
+
+    if( not visitor->apply_to_children() ){ return; }
+
+    int num_children = 2;
+    if( child_conditional )
+    {
+        num_children += 1;
+    }
+
+    visitor->initiate_children( num_children );
+
+    AST_visitor_base* ifExp_child = visitor->get_child(0);
+    if_expression->apply_visitor( ifExp_child );
+
+    AST_visitor_base* ifBlock_child = visitor->get_child(1);
+    block_AST->apply_visitor( ifBlock_child );
+
+    AST_visitor_base* childCond_visit = nullptr;
+    if( child_conditional )
+    {
+        childCond_visit = visitor->get_child(2);
+        child_conditional->apply_visitor( childCond_visit );
+    }
+
+
+    visitor->ifCond_up( this, ifExp_child, ifBlock_child, childCond_visit );
+    visitor->activeCond_up( this, ifExp_child, ifBlock_child, childCond_visit  );
+    visitor->conditional_up( this, ifBlock_child );
+    visitor->flowControl_up( this, ifBlock_child );
+    visitor->ASTnode_up( this );
+}
+
+
+// ELIF
+elif_AST_node::elif_AST_node(expression_AST_ptr _if_expression, block_AST_ptr block_AST, conditional_AST_ptr _child_conditional, location_span _loc ) :
+    activeCond_AST_node(_if_expression, block_AST, _child_conditional)
+{
+    loc = _loc;
+    verification_state = -1;
+    symbol_table = nullptr;
+}
+
+void elif_AST_node::apply_visitor_inner(AST_visitor_base* visitor)
+{
+    visitor->elifCond_down( this );
+    visitor->activeCond_down( this );
+    visitor->conditional_down( this );
+    visitor->flowControl_down( this );
+    visitor->ASTnode_down( this );
+
+    if( not visitor->apply_to_children() ){ return; }
+
+    int num_children = 2;
+    if( child_conditional )
+    {
+        num_children += 1;
+    }
+
+    visitor->initiate_children( num_children );
+
+    AST_visitor_base* ifExp_child = visitor->get_child(0);
+    if_expression->apply_visitor( ifExp_child );
+
+    AST_visitor_base* elifBlock_child = visitor->get_child(1);
+    block_AST->apply_visitor( elifBlock_child );
+
+    AST_visitor_base* childCond_visit = nullptr;
+    if( child_conditional )
+    {
+        childCond_visit = visitor->get_child(2);
+        child_conditional->apply_visitor( childCond_visit );
+    }
+
+    visitor->elifCond_up( this, ifExp_child, elifBlock_child, childCond_visit );
+    visitor->activeCond_up( this, ifExp_child, elifBlock_child, childCond_visit  );
+    visitor->conditional_up( this, elifBlock_child );
+    visitor->flowControl_up( this, elifBlock_child );
+    visitor->ASTnode_up( this );
+}
+
+
+else_AST_node::else_AST_node(block_AST_ptr _block_AST, location_span _loc)
+{
+    loc = _loc;
+    verification_state = -1;
+    symbol_table = nullptr;
+
+    block_AST = _block_AST;
+    inner_symbol_table = nullptr;
+}
+
+void else_AST_node::apply_visitor_inner(AST_visitor_base* visitor)
+{
+    visitor->else_down( this );
+    visitor->conditional_down( this );
+    visitor->flowControl_down( this );
+    visitor->ASTnode_down( this );
+
+    if( not visitor->apply_to_children() ){ return; }
+
+    visitor->initiate_children( 1 );
+
+    AST_visitor_base* elseBlock_child = visitor->get_child(0);
+    block_AST->apply_visitor( elseBlock_child );
+
+    visitor->else_up( this, elseBlock_child );
+    visitor->conditional_up( this, elseBlock_child );
+    visitor->flowControl_up( this, elseBlock_child );
+    visitor->ASTnode_up( this );
+}
+
+
+
+/// LOOPS ///
+
+// while
+whileLoop_AST_node::whileLoop_AST_node(block_AST_ptr _block_AST, expression_AST_ptr _whileExp, csu::location_span _loc)
+{
+    loc = _loc;
+    verification_state = -1;
+    symbol_table = nullptr;
+
+    block_AST = _block_AST;
+    inner_symbol_table = nullptr;
+
+    while_expression = _whileExp;
+}
+
+void whileLoop_AST_node::apply_visitor_inner(AST_visitor_base* visitor)
+{
+    visitor->while_down( this );
+    visitor->loop_down( this );
+    visitor->flowControl_down( this );
+    visitor->ASTnode_down( this );
+
+    if( not visitor->apply_to_children() ){ return; }
+
+    visitor->initiate_children( 2 );
+
+
+    AST_visitor_base* whileExp_child = visitor->get_child(0);
+    while_expression->apply_visitor( whileExp_child );
+
+    AST_visitor_base* block_child = visitor->get_child(1);
+    block_AST->apply_visitor( block_child );
+
+    visitor->while_up( this, whileExp_child, block_child );
+    visitor->loop_up( this, block_child );
+    visitor->flowControl_up( this, block_child );
+    visitor->ASTnode_up( this );
+}
+
+// for
+forLoop_AST_node::forLoop_AST_node(block_AST_ptr _block_AST, expression_AST_ptr _whileExp, statement_AST_ptr _initial_statement, statement_AST_ptr _update_statement, csu::location_span _loc)
+{
+    loc = _loc;
+    verification_state = -1;
+    symbol_table = nullptr;
+
+    block_AST = _block_AST;
+    inner_symbol_table = nullptr;
+
+    while_expression = _whileExp;
+    initial_statement = _initial_statement;
+    update_statement = _update_statement;
+}
+
+void forLoop_AST_node::apply_visitor_inner(AST_visitor_base* visitor)
+{
+    visitor->for_down( this );
+    visitor->loop_down( this );
+    visitor->flowControl_down( this );
+    visitor->ASTnode_down( this );
+
+    if( not visitor->apply_to_children() ){ return; }
+
+    visitor->initiate_children( 4 );
+
+    AST_visitor_base* initialStmt_child = visitor->get_child(0);
+    initial_statement->apply_visitor( initialStmt_child );
+
+    AST_visitor_base* updateStmt_child = visitor->get_child(1);
+    update_statement->apply_visitor( updateStmt_child );
+
+    AST_visitor_base* whileExp_child = visitor->get_child(2);
+    while_expression->apply_visitor( whileExp_child );
+
+    AST_visitor_base* block_child = visitor->get_child(3);
+    block_AST->apply_visitor( block_child );
+
+    visitor->for_up( this, initialStmt_child, updateStmt_child, whileExp_child, block_child );
+    visitor->loop_up( this, block_child );
+    visitor->flowControl_up( this, block_child );
+    visitor->ASTnode_up( this );
 }
 
 
@@ -1103,7 +1374,7 @@ expression_statement_AST_node::expression_statement_AST_node(expression_AST_ptr 
     loc = expression->loc;
 }
 
-void expression_statement_AST_node::apply_visitor(AST_visitor_base* visitor)
+void expression_statement_AST_node::apply_visitor_inner(AST_visitor_base* visitor)
 {
     visitor->expressionStatement_down( this );
     visitor->statement_down( this );
@@ -1115,9 +1386,9 @@ void expression_statement_AST_node::apply_visitor(AST_visitor_base* visitor)
     AST_visitor_base* child = visitor->get_child(0) ;
     expression->apply_visitor( child );
 
-    visitor->ASTnode_up( this );
-    visitor->statement_up( this );
     visitor->expressionStatement_up( this, child );
+    visitor->statement_up( this );
+    visitor->ASTnode_up( this );
 
 }
 
@@ -1133,7 +1404,7 @@ definition_statement_AST_node::definition_statement_AST_node(varType_ASTrepr_ptr
     variable_symbol = nullptr;
 }
 
-void definition_statement_AST_node::apply_visitor(AST_visitor_base* visitor)
+void definition_statement_AST_node::apply_visitor_inner(AST_visitor_base* visitor)
 {
     visitor->definitionStmt_down( this );
     visitor->typed_VarDef_down( this );
@@ -1147,11 +1418,12 @@ void definition_statement_AST_node::apply_visitor(AST_visitor_base* visitor)
     AST_visitor_base* child = visitor->get_child(0);
     var_type->apply_visitor( child );
 
-    visitor->ASTnode_up( this );
-    visitor->statement_up( this );
-    visitor->generic_VarDef_up(this);
-    visitor->typed_VarDef_up( this, child);
+
     visitor->definitionStmt_up( this, child );
+    visitor->typed_VarDef_up( this, child);
+    visitor->generic_VarDef_up(this);
+    visitor->statement_up( this );
+    visitor->ASTnode_up( this );
 }
 
 // definition and construction
@@ -1167,7 +1439,7 @@ definitionNconstruction_statement_AST_node::definitionNconstruction_statement_AS
     argument_list = _argument_list;
 }
 
-void definitionNconstruction_statement_AST_node::apply_visitor(AST_visitor_base* visitor)
+void definitionNconstruction_statement_AST_node::apply_visitor_inner(AST_visitor_base* visitor)
 {
     visitor->definitionNconstructionStmt_down( this );
     visitor->typed_VarDef_down(this);
@@ -1183,12 +1455,51 @@ void definitionNconstruction_statement_AST_node::apply_visitor(AST_visitor_base*
     AST_visitor_base* argumentList_child = visitor->get_child(1);
     argument_list->apply_visitor( argumentList_child );
 
-    visitor->ASTnode_up( this );
-    visitor->statement_up( this );
-    visitor->generic_VarDef_up(this);
-    visitor->typed_VarDef_up( this, varType_child);
     visitor->definitionNconstruction_up( this, varType_child,  argumentList_child);
+    visitor->typed_VarDef_up( this, varType_child);
+    visitor->generic_VarDef_up(this);
+    visitor->statement_up( this );
+    visitor->ASTnode_up( this );
 }
+
+// definition and assignment
+definitionNassignment_statement_AST_node::definitionNassignment_statement_AST_node(varType_ASTrepr_ptr _var_type, csu::utf8_string _var_name,
+                                                                                   expression_AST_ptr _expression, csu::location_span _loc)
+    {
+    //type_of_statement = statement_AST_node::definition_t;
+
+    var_type = _var_type;
+    var_name = _var_name;
+    loc = _loc;
+    variable_symbol = nullptr;
+
+    expression = _expression;
+}
+
+void definitionNassignment_statement_AST_node::apply_visitor_inner(AST_visitor_base* visitor)
+{
+    visitor->definitionNassignmentStmt_down( this );
+    visitor->typed_VarDef_down(this);
+    visitor->generic_VarDef_down(this);
+    visitor->statement_down( this );
+    visitor->ASTnode_down( this );
+
+    if( not visitor->apply_to_children() ){ return; }
+
+    visitor->initiate_children( 2 );
+    AST_visitor_base* varType_child = visitor->get_child(0);
+    var_type->apply_visitor( varType_child );
+    AST_visitor_base* exp_child = visitor->get_child(1);
+    expression->apply_visitor( exp_child );
+
+    visitor->definitionNassignment_up( this, varType_child,  exp_child);
+    visitor->typed_VarDef_up( this, varType_child);
+    visitor->generic_VarDef_up(this);
+    visitor->statement_up( this );
+    visitor->ASTnode_up( this );
+}
+
+
 
 // assignment
 assignment_statement_AST_node::assignment_statement_AST_node( LHSref_AST_ptr _LHS, expression_AST_ptr _expression, location_span _loc)
@@ -1199,7 +1510,7 @@ assignment_statement_AST_node::assignment_statement_AST_node( LHSref_AST_ptr _LH
     expression = _expression;
 }
 
-void assignment_statement_AST_node::apply_visitor(AST_visitor_base* visitor)
+void assignment_statement_AST_node::apply_visitor_inner(AST_visitor_base* visitor)
 {
     visitor->assignmentStmt_down( this );
     visitor->statement_down( this );
@@ -1213,9 +1524,9 @@ void assignment_statement_AST_node::apply_visitor(AST_visitor_base* visitor)
     AST_visitor_base* exp_child = visitor->get_child(0) ;
     expression->apply_visitor( exp_child );
 
-    visitor->ASTnode_up( this );
-    visitor->statement_up( this );
     visitor->assignmentStmt_up( this, LHS_child, exp_child );
+    visitor->statement_up( this );
+    visitor->ASTnode_up( this );
 }
 
 // auto definition
@@ -1226,7 +1537,7 @@ auto_definition_statement_AST_node::auto_definition_statement_AST_node(utf8_stri
     loc = _loc;
 }
 
-void auto_definition_statement_AST_node::apply_visitor(AST_visitor_base* visitor)
+void auto_definition_statement_AST_node::apply_visitor_inner(AST_visitor_base* visitor)
 {
     visitor->autoDefStmt_down( this );
     visitor->generic_VarDef_down(this);
@@ -1239,10 +1550,10 @@ void auto_definition_statement_AST_node::apply_visitor(AST_visitor_base* visitor
     AST_visitor_base* child = visitor->get_child(0) ;
     expression->apply_visitor( child );
 
-    visitor->ASTnode_up( this );
-    visitor->statement_up( this );
-    visitor->generic_VarDef_up(this);
     visitor->autoDefStmt_up( this, child );
+    visitor->generic_VarDef_up(this);
+    visitor->statement_up( this );
+    visitor->ASTnode_up( this );
 }
 
 
@@ -1254,7 +1565,7 @@ return_statement_AST_node::return_statement_AST_node(expression_AST_ptr _express
     callable_to_escape = nullptr;
 }
 
-void return_statement_AST_node::apply_visitor(AST_visitor_base* visitor)
+void return_statement_AST_node::apply_visitor_inner(AST_visitor_base* visitor)
 {
     visitor->returnStatement_down( this );
     visitor->statement_down( this );
@@ -1266,10 +1577,33 @@ void return_statement_AST_node::apply_visitor(AST_visitor_base* visitor)
     AST_visitor_base* child = visitor->get_child(0) ;
     expression->apply_visitor( child );
 
-    visitor->ASTnode_up( this );
-    visitor->statement_up( this );
     visitor->returnStatement_up( this, child );
+    visitor->statement_up( this );
+    visitor->ASTnode_up( this );
 
+}
+
+// loop control
+loopCntrl_statement_AST_node::loopCntrl_statement_AST_node(cntrl_type _type, int _depth, csu::location_span _loc)
+{
+    loc = _loc;
+    depth = _depth;
+    type = _type;
+}
+
+void loopCntrl_statement_AST_node::apply_visitor_inner(AST_visitor_base* visitor)
+{
+    visitor->loopCntrlStatement_down( this );
+    visitor->statement_down( this );
+    visitor->ASTnode_down( this );
+
+    if( not visitor->apply_to_children() ){ return; }
+
+    visitor->initiate_children( 0 );
+
+    visitor->loopCntrlStatement_up( this );
+    visitor->statement_up( this );
+    visitor->ASTnode_up( this );
 }
 
 
@@ -1292,7 +1626,7 @@ LHS_varReference::LHS_varReference(utf8_string& _name, location_span _loc )
     variable_symbol = nullptr;
 }
 
-void LHS_varReference::apply_visitor(AST_visitor_base* visitor)
+void LHS_varReference::apply_visitor_inner(AST_visitor_base* visitor)
 {
     visitor->LHS_varRef_down( this );
     visitor->LHSReference_down( this );
@@ -1300,9 +1634,9 @@ void LHS_varReference::apply_visitor(AST_visitor_base* visitor)
 
     if( not visitor->apply_to_children() ){ return; }
 
-    visitor->ASTnode_up( this );
-    visitor->LHSReference_up( this );
     visitor->LHS_varRef_up( this );
+    visitor->LHSReference_up( this );
+    visitor->ASTnode_up( this );
 }
 
 //member access
@@ -1313,7 +1647,7 @@ LHS_accessor_AST_node::LHS_accessor_AST_node(LHSref_AST_ptr _LHS_exp, utf8_strin
     LHS_exp = _LHS_exp;
 }
 
-void LHS_accessor_AST_node::apply_visitor(AST_visitor_base* visitor)
+void LHS_accessor_AST_node::apply_visitor_inner(AST_visitor_base* visitor)
 {
     visitor->LHS_accessor_down( this );
     visitor->LHSReference_down( this );
@@ -1325,9 +1659,9 @@ void LHS_accessor_AST_node::apply_visitor(AST_visitor_base* visitor)
     AST_visitor_base* EXP_child = visitor->get_child(0);
     LHS_exp->apply_visitor( EXP_child );
 
-    visitor->ASTnode_up( this );
-    visitor->LHSReference_up( this );
     visitor->LHS_accessor_up( this, EXP_child );
+    visitor->LHSReference_up( this );
+    visitor->ASTnode_up( this );
 }
 
 
@@ -1341,9 +1675,9 @@ void LHS_accessor_AST_node::apply_visitor(AST_visitor_base* visitor)
 expression_AST_node::expression_AST_node()
 {
     expression_return_type = nullptr;
-    has_output_ownership = true;
+    //has_output_ownership = true;
 
-    writer = nullptr;
+    //writer = nullptr;
 }
 
 // int literal
@@ -1354,7 +1688,7 @@ intLiteral_expression_AST_node::intLiteral_expression_AST_node(utf8_string _lite
     loc = _loc;
 }
 
-void intLiteral_expression_AST_node::apply_visitor(AST_visitor_base* visitor)
+void intLiteral_expression_AST_node::apply_visitor_inner(AST_visitor_base* visitor)
 {
     visitor->intLiteral_down( this );
     visitor->expression_down( this );
@@ -1362,23 +1696,23 @@ void intLiteral_expression_AST_node::apply_visitor(AST_visitor_base* visitor)
 
     if( not visitor->apply_to_children() ){ return; }
 
-    visitor->ASTnode_up( this );
-    visitor->expression_up( this );
     visitor->intLiteral_up( this );
+    visitor->expression_up( this );
+    visitor->ASTnode_up( this );
 
 }
 
 // binary operator
 binOperator_expression_AST_node::binOperator_expression_AST_node(expression_AST_ptr _left_operand, expression_type _type, expression_AST_ptr _right_operand)
 {
-    //type_of_expression = expression_AST_node::binary_operator_t;
+    mode_of_operation = binOperator_expression_AST_node::LHS_m;
     left_operand = _left_operand;
     type_of_operation = _type;
     right_operand = _right_operand;
     loc = left_operand->loc + right_operand->loc;
 }
 
-void binOperator_expression_AST_node::apply_visitor(AST_visitor_base* visitor)
+void binOperator_expression_AST_node::apply_visitor_inner(AST_visitor_base* visitor)
 {
     visitor->binOperator_down( this );
     visitor->expression_down( this );
@@ -1392,9 +1726,9 @@ void binOperator_expression_AST_node::apply_visitor(AST_visitor_base* visitor)
     AST_visitor_base* RHS_child = visitor->get_child(1) ;
     right_operand->apply_visitor( RHS_child );
 
-    visitor->ASTnode_up( this );
-    visitor->expression_up( this );
     visitor->binOperator_up( this, LHS_child, RHS_child );
+    visitor->expression_up( this );
+    visitor->ASTnode_up( this );
 
 }
 
@@ -1406,7 +1740,7 @@ varReferance_expression_AST_node::varReferance_expression_AST_node(csu::utf8_str
     loc = _loc;
 }
 
-void varReferance_expression_AST_node::apply_visitor(AST_visitor_base* visitor)
+void varReferance_expression_AST_node::apply_visitor_inner(AST_visitor_base* visitor)
 {
     visitor->varReferance_down( this );
     visitor->expression_down( this );
@@ -1414,9 +1748,9 @@ void varReferance_expression_AST_node::apply_visitor(AST_visitor_base* visitor)
 
     if( not visitor->apply_to_children() ){ return; }
 
-    visitor->ASTnode_up( this );
-    visitor->expression_up( this );
     visitor->varReferance_up( this );
+    visitor->expression_up( this );
+    visitor->ASTnode_up( this );
 }
 
 // member accessor expression
@@ -1427,7 +1761,7 @@ accessor_expression_AST_node::accessor_expression_AST_node(expression_AST_ptr _e
     loc = _loc;
 }
 
-void accessor_expression_AST_node::apply_visitor(AST_visitor_base* visitor)
+void accessor_expression_AST_node::apply_visitor_inner(AST_visitor_base* visitor)
 {
     visitor->accessorExp_down( this );
     visitor->expression_down( this );
@@ -1439,9 +1773,9 @@ void accessor_expression_AST_node::apply_visitor(AST_visitor_base* visitor)
     AST_visitor_base* EXP_child = visitor->get_child(0);
     expression->apply_visitor( EXP_child );
 
-    visitor->ASTnode_up( this );
-    visitor->expression_up( this );
     visitor->accessorExp_up( this, EXP_child );
+    visitor->expression_up( this );
+    visitor->ASTnode_up( this );
 }
 
 // parenthesis expression grouping
@@ -1451,7 +1785,7 @@ ParenGrouped_expression_AST_node::ParenGrouped_expression_AST_node(expression_AS
     expression = _expression;
 }
 
-void ParenGrouped_expression_AST_node::apply_visitor(AST_visitor_base* visitor)
+void ParenGrouped_expression_AST_node::apply_visitor_inner(AST_visitor_base* visitor)
 {
     visitor->ParenExpGrouping_down( this );
     visitor->expression_down( this );
@@ -1463,9 +1797,9 @@ void ParenGrouped_expression_AST_node::apply_visitor(AST_visitor_base* visitor)
     AST_visitor_base* EXP_child = visitor->get_child(0);
     expression->apply_visitor( EXP_child );
 
-    visitor->ASTnode_up( this );
-    visitor->expression_up( this );
     visitor->ParenExpGrouping_up( this, EXP_child );
+    visitor->expression_up( this );
+    visitor->ASTnode_up( this );
 }
 
 // function call
@@ -1476,7 +1810,7 @@ functionCall_expression_AST_node::functionCall_expression_AST_node( expression_A
     argument_list = _argument_list;
 }
 
-void functionCall_expression_AST_node::apply_visitor(AST_visitor_base* visitor)
+void functionCall_expression_AST_node::apply_visitor_inner(AST_visitor_base* visitor)
 {
     visitor->functionCall_Exp_down( this );
     visitor->expression_down( this );
@@ -1490,9 +1824,9 @@ void functionCall_expression_AST_node::apply_visitor(AST_visitor_base* visitor)
     AST_visitor_base* args_child = visitor->get_child(1) ;
     argument_list->apply_visitor( args_child );
 
-    visitor->ASTnode_up( this );
-    visitor->expression_up( this );
     visitor->functionCall_Exp_up( this, exp_child, args_child );
+    visitor->expression_up( this );
+    visitor->ASTnode_up( this );
 }
 
 

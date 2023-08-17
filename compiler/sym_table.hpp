@@ -17,6 +17,8 @@ limitations under the License.
 This file defines the Cyth symbol table
 */
 
+// This should probably be split into multiple files
+
 #ifndef SYM_TABLE_180127164658
 #define SYM_TABLE_180127164658
 
@@ -31,13 +33,11 @@ This file defines the Cyth symbol table
 
 #include "lexer.hpp"
 #include "UTF8.hpp"
+#include "c_expressions.hpp"
+#include "c_source_writer.hpp"
 
 
 
-class sym_table_base;
-
-//class ResolvedFunction;
-//typedef std::shared_ptr<ResolvedFunction> ResolvedFunction_ptr;
 
 class varType;
 typedef std::shared_ptr<varType> varType_ptr;
@@ -45,14 +45,8 @@ typedef std::shared_ptr<varType> varType_ptr;
 class varName;
 typedef std::shared_ptr<varName> varName_ptr;
 
-class func_parameter_info;
-typedef std::shared_ptr<func_parameter_info> func_param_ptr;
-
 class sym_table_base;
 typedef std::shared_ptr<sym_table_base> sym_table_ptr;
-
-class call_argument_list;
-typedef std::shared_ptr<call_argument_list> argumentList_AST_ptr;
 
 class DefClassType;
 typedef std::shared_ptr<DefClassType> ClassType_ptr;
@@ -60,47 +54,31 @@ typedef std::shared_ptr<DefClassType> ClassType_ptr;
 class MethodType;
 typedef std::shared_ptr<MethodType> MethodType_ptr;
 
-
-// TODO:   LESSONS LEARNED THAT SHOULD BE APPLIED
-// expression writers should be able to write C statements and return C expressions, generally they need to return C expression writers.
-// ditto for LHS references
-// functions will, in general, need the AST node
-// AST nodes and var type pointers should be replaced with shared pointers
-// functions that can error should be able to return messages
-
-class call_argument_list;
-
-class expression_AST_node;
-typedef std::shared_ptr<expression_AST_node> expression_AST_ptr;
+class MetaType;
+typedef std::shared_ptr<MetaType> MetaType_ptr;
 
 
+class func_parameter_info;
+typedef std::shared_ptr<func_parameter_info> func_param_ptr;
 
-class expression_call_writer
-// This class is returned by some expressions. Essentually needed to control when the cleanup happens
-// eventually, all code needs to be refractored so that expression writers return this and not a simple C-expression
-// simularly, every writer that takes a C-expression should take a exp_writer_ptr and not a string
+class function_argument_types;
+typedef std::shared_ptr<function_argument_types> function_argument_types_ptr;
+
+class parameter_to_arguments_mapper;
+typedef std::shared_ptr<parameter_to_arguments_mapper> parm_arg_map_ptr;
+
+
+enum class cast_enum
 {
-public:
-    virtual csu::utf8_string get_C_expression()=0; // this may be called multiple times
-    virtual void write_cleanup()=0;  // this is called once, always after get_C_expression is called at least once and written to C
-};
-typedef std::shared_ptr<expression_call_writer> exp_writer_ptr;
-
-class simple_expression_writer : public expression_call_writer
-{
-public:
-    csu::utf8_string exp;
-
-    simple_expression_writer(){}
-
-    simple_expression_writer(csu::utf8_string _exp) :
-        exp(_exp)
-        {}
-
-    csu::utf8_string get_C_expression() {  return exp; }
-    void write_cleanup(){}
+    explicit_casts,
+    implicit_casts,
+    pntr_casts
+    //no_casting not implemented
 };
 
+// a rule when using C_expression_ptr.
+// if one of the methods of varType takes a C_expression_ptr, and returns a C_expression_ptr.
+// the return C_expression_ptr will NOT own the C_expression_ptr passed to the method (I think??)
 
 class varType : public std::enable_shared_from_this<varType> // shared_from_this()
 {
@@ -115,6 +93,7 @@ public:
         function_pntr_t,
         defined_class_t,
         method_function_t,
+        metatype_t,
     };
 
     varType_type type_of_type;
@@ -122,6 +101,7 @@ public:
     // TODO: complete these for each type-of-type
     ClassType_ptr as_class();
     MethodType_ptr as_method();
+    MetaType_ptr as_metatype();
 
 
     csu::utf8_string definition_name; // probably need to generalize this away from string.
@@ -134,8 +114,7 @@ public:
     csu::location_span loc;
     bool is_ordered;
 
-    virtual bool is_equivalent(varType* RHS)=0;
-    virtual varType_ptr copy(csu::utf8_string _definition_name="" )=0;
+    virtual bool is_equivalent(varType_ptr RHS); // default checks pointer
 
     // some types (ex. callables) may take awhile to get fully defined.
     // if this returns false, we cannot do or test anything with this type....yet
@@ -147,136 +126,266 @@ public:
     virtual bool can_be_defined();
     // define new variable of this type.
     //Does NOT end with ';'  ( this should change!!)
-    virtual void C_definition_name(csu::utf8_string& var_name, std::ostream& output);
-    virtual void initialize(csu::utf8_string& var_exp, std::ostream& output) {}
+    virtual void C_definition_name(csu::utf8_string& var_name, Csource_out_ptr output);
+    virtual void initialize(csu::utf8_string& var_exp, Csource_out_ptr output) {}
     // initialize should do things that only need be done once per type. (such as set the vtable(s) ).
     // good luck calling this in all the right places!
 
+
+    // call when object is C-copied without calling constructor or assignment.
+    // Often used when passing too and from a method.
+    virtual void inform_moved(csu::utf8_string& var_name, Csource_out_ptr output, bool call_virtual=false){}
+
+
+    virtual varType_ptr get_auto_type(){ return nullptr; }; // returns null if this doesn't have an auto type.
 
 
     /// CALLING ///
     // default is null, returns the expected return type
 // TODO: make it so argument_node_ptr can be null if we explicitly want call with no arguments or params
-    virtual varType_ptr is_callable(call_argument_list* argument_node_ptr, csu::utf8_string& error_msg);
-    virtual exp_writer_ptr write_call(call_argument_list* argument_node, exp_writer_ptr LHS_Cexp,
-        std::vector<csu::utf8_string>& argument_Cexpressions, std::ostream& output, bool call_virtual=false);
+    virtual varType_ptr is_callable(function_argument_types_ptr argument_types, csu::utf8_string& error_msg,
+                                cast_enum cast_behavior=cast_enum::implicit_casts);
+    virtual C_expression_ptr write_call(function_argument_types_ptr argument_types, C_expression_ptr LHS_Cexp,
+        std::vector<C_expression_ptr>& argument_Cexpressions, Csource_out_ptr output, bool call_virtual=false,
+                                cast_enum cast_behavior=cast_enum::implicit_casts);
+        // note: return of write_call is a bit sophisticated. If return is unknown C-type, then the return is most likely a string representing the call itself
+            // in which case is unreferencable, and thus also claims to not own its memory, which is technically true...
+        // otherwise this will write the call to output, and the return will represent a temporary variable if possible
+        //    or an empty void if not
+        // hopefully this all behaves as it should.
 
 
+  /// BINARY OPERATORS ///
+    // default is null (no)
+    // MATH
+      // power
+    virtual varType_ptr get_has_LHSpower(varType_ptr RHS_type){ return nullptr; };
+    virtual C_expression_ptr write_LHSpower(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false);
+    virtual varType_ptr get_has_RHSpower(varType_ptr LHS_type){ return nullptr; };
+    virtual C_expression_ptr write_RHSpower(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false);
+      // multiplication
+    virtual varType_ptr get_has_LHSmultiplication(varType_ptr RHS_type){ return nullptr; };
+    virtual C_expression_ptr write_LHSmultiplication(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false);
+    virtual varType_ptr get_has_RHSmultiplication(varType_ptr LHS_type){ return nullptr; };
+    virtual C_expression_ptr write_RHSmultiplication(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false);
+      // division
+    virtual varType_ptr get_has_LHSdivision(varType_ptr RHS_type){ return nullptr; };
+    virtual C_expression_ptr write_LHSdivision(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false);
+    virtual varType_ptr get_has_RHSdivision(varType_ptr LHS_type){ return nullptr; };
+    virtual C_expression_ptr write_RHSdivision(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false);
+      // modulus
+    virtual varType_ptr get_has_LHSmodulus(varType_ptr RHS_type){ return nullptr; };
+    virtual C_expression_ptr write_LHSmodulus(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false);
+    virtual varType_ptr get_has_RHSmodulus(varType_ptr LHS_type){ return nullptr; };
+    virtual C_expression_ptr write_RHSmodulus(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false);
+      // addition
+    virtual varType_ptr get_has_LHSaddition(varType_ptr RHS_type){ return nullptr; };
+    virtual C_expression_ptr write_LHSaddition(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false);
+    virtual varType_ptr get_has_RHSaddition(varType_ptr LHS_type){ return nullptr; };
+    virtual C_expression_ptr write_RHSaddition(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false);
+      // subtraction
+    virtual varType_ptr get_has_LHSsubtraction(varType_ptr RHS_type){ return nullptr; };
+    virtual C_expression_ptr write_LHSsubtraction(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false);
+    virtual varType_ptr get_has_RHSsubtraction(varType_ptr LHS_type){ return nullptr; };
+    virtual C_expression_ptr write_RHSsubtraction(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false);
 
-    /// ADDITION ///
-    // default is false
-// TODO: combine these two.
-    virtual bool get_has_LHSaddition(varType* RHS_type);
-    virtual varType_ptr get_LHSaddition_type(varType* RHS_type);
-    virtual exp_writer_ptr write_LHSaddition(expression_AST_ptr LHS_ast, csu::utf8_string& LHS_exp, expression_AST_ptr RHS_ast,
-       csu::utf8_string& RHS_exp, std::ostream& output, bool call_virtual=false);
+
+// COMPARISON
+    // lessThan
+    virtual varType_ptr get_has_LHSlessThan(varType_ptr RHS_type){ return nullptr; };
+    virtual C_expression_ptr write_LHSlessThan(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false);
+    virtual varType_ptr get_has_RHSlessThan(varType_ptr LHS_type){ return nullptr; };
+    virtual C_expression_ptr write_RHSlessThan(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                            Csource_out_ptr output, bool call_virtual=false);
+
+    // greatThan
+
+    virtual varType_ptr get_has_LHSgreatThan(varType_ptr RHS_type){ return nullptr; };
+    virtual C_expression_ptr write_LHSgreatThan(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false);
+    virtual varType_ptr get_has_RHSgreatThan(varType_ptr LHS_type){ return nullptr; };
+    virtual C_expression_ptr write_RHSgreatThan(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false);
+
+    // equalTo
+    virtual varType_ptr get_has_LHSequalTo(varType_ptr RHS_type){ return nullptr; };
+    virtual C_expression_ptr write_LHSequalTo(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false);
+    virtual varType_ptr get_has_RHSequalTo(varType_ptr LHS_type){ return nullptr; };
+    virtual C_expression_ptr write_RHSequalTo(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false);
+
+    // notEqual
+    virtual varType_ptr get_has_LHSnotEqual(varType_ptr RHS_type){ return nullptr; };
+    virtual C_expression_ptr write_LHSnotEqual(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false);
+    virtual varType_ptr get_has_RHSnotEqual(varType_ptr LHS_type){ return nullptr; };
+    virtual C_expression_ptr write_RHSnotEqual(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false);
+
+    // lessEqual
+    virtual varType_ptr get_has_LHSlessEqual(varType_ptr RHS_type){ return nullptr; };
+    virtual C_expression_ptr write_LHSlessEqual(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false);
+    virtual varType_ptr get_has_RHSlessEqual(varType_ptr LHS_type){ return nullptr; };
+    virtual C_expression_ptr write_RHSlessEqual(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false);
+
+    // greatEqual
+    virtual varType_ptr get_has_LHSgreatEqual(varType_ptr RHS_type){ return nullptr; };
+    virtual C_expression_ptr write_LHSgreatEqual(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false);
+    virtual varType_ptr get_has_RHSgreatEqual(varType_ptr LHS_type){ return nullptr; };
+    virtual C_expression_ptr write_RHSgreatEqual(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false);
+
 
 
 
     /// ASSIGNMENT /// What types can assign TO this type?
     // default is false
-    virtual bool get_has_assignment(varType* RHS_type);
+    virtual bool get_has_assignment(varType_ptr RHS_type){ return false; }
     // DOES write end ';'
-// needs to be fixed BADLY, and made possibly virtual
-    virtual void write_assignment(varType* RHS_type, expression_AST_node* RHS_AST_node,
-                                  csu::utf8_string& LHS, csu::utf8_string& RHS_exp, std::ostream& output);
+    virtual void write_assignment(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                            Csource_out_ptr output, bool call_virtual=false);
 
-    virtual varType_ptr get_auto_type(); // returns null if this doesn't have an auto type.
-
+    // assignTo is when assignment is defined by RHS type, and not LHS type. normal assignment is prefered
     // default is false
-    virtual bool get_has_assignTo(varType* LHS_type);
-    virtual void write_assignTo(varType* LHS_type, expression_AST_node* RHS_AST_node, csu::utf8_string& LHS,
-                        csu::utf8_string& RHS_exp, std::ostream& output, bool call_virtual=false);
+    virtual bool get_has_assignTo(varType_ptr LHS_type) { return false; }
+    virtual void write_assignTo(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                            Csource_out_ptr output, bool call_virtual=false);
+
 
 
 
     /// REFERENCING ///
-// TODO: may need to re-think this, especially is_static_type
     // sets is_ref to true or false accordingly. Returns null if can reference any type, otherwise returns specific type
     virtual varType_ptr is_reference_type(bool &is_ref);
-    virtual bool can_take_reference(varType* RHS_type); // must return true at least for the type returned by is_reference_type
-    virtual void take_reference(varType* RHS_type, csu::utf8_string& LHS, csu::utf8_string& referencable_RHS_exp, std::ostream& output);
-// NOTE: can_take_reference does NOT call can_get_pointer (below) (so casting is controlled!)
+    virtual bool can_take_reference(varType_ptr RHS_type){ return false; } // must return true at least for the type returned by is_reference_type
+    virtual void take_reference(C_expression_ptr LHS_exp, C_expression_ptr referencable_RHS_exp, Csource_out_ptr output);
+// NOTE: can_take_reference does NOT call can_get_pointer (below) (so casting is controlled!) Thus can_take_reference doesn't account for polymorphism
 //   but take_reference will ALWAYS call get_pointer. Assumes always can get pointer to own type
 
+// the way this works is that if ref-type can_take_reference than call  can_get_pointer on RHS (with ref-type is_reference_type as argument)
+// need to consider rules when is_reference_type is null... not fully considered yet
 
+// some (simple) ref-types need external memory given (via take reference).
+// If this is false, then var can get dynamic memory when needed.
+// If this returns true, is_reference_type MUST return a specific type!
+    virtual bool needs_external_memory(){ return false; }
+
+
+// these are defined for all types, necessary for taking references
     // by default, will allow getting own pointer
     // this also, in general, allows implicit pointer casting to parent types
-    virtual bool can_get_pointer(varType* output_type); // in general, should return true for equivlent type, at least
+    virtual bool can_get_pointer(varType_ptr output_type); // in general, should return true for equivlent type, at least
     // return C expression should be pointer to output_type. exp needs to be referancable c-expression to this type
-    // MUST work for own type.
-    virtual csu::utf8_string get_pointer(varType* output_type, csu::utf8_string& exp, std::ostream& output);
+    // MUST work for own type. This is essentually the lowest-level interface for polymorphism
+    virtual csu::utf8_string get_pointer(varType_ptr output_type, csu::utf8_string& exp, Csource_out_ptr output);
 
-    bool is_static_type(){ return true; } // IE, is this just as it appears, or can there be wierd indirection. (IE, can you call a non-virtual destructor?)
+
+// we we even use this??
+  //  bool is_static_type(){ return true; } // IE, is this just as it appears, or can there be wierd indirection. (IE, can you call a non-virtual destructor?)
 // note that non-static types should automatically call virtual methods.
 //     Thus, calling code should generally assume type is static, call non-virtual methods, and not worry about it.
 //     The non-static type will intercept this and realize the call should be virtual
 
 
+
+
     /// CLASS THINGS ///
-
-
     /// members
           // RHS
           // use when accses membor, a referance is allowed but not needed (could be a copy)
     // only returns null if problem, not print error
-    virtual varType_ptr member_has_getter(csu::utf8_string& member_name); // default is null
+    virtual varType_ptr member_has_getter(csu::utf8_string& member_name){ return nullptr; } // default is null
     // note this wraps new exp in parenthesis. "expression" parameter must have this type
     // could write C statements. Returns C expression
-    virtual exp_writer_ptr write_member_getter(csu::utf8_string& expression, csu::utf8_string& member_name,
-            std::ostream& output, bool call_virtual=false);
+    virtual C_expression_ptr write_member_getter(C_expression_ptr LHS_exp, csu::utf8_string& member_name,
+            Csource_out_ptr output, bool call_virtual=false);
 
         //LHS
     // same, but getter MUST be an actual reference. Used in LHS expressions.
-    virtual varType_ptr member_has_getref(csu::utf8_string& member_name); // default is null
+    virtual varType_ptr member_has_getref(csu::utf8_string& member_name){ return nullptr; } // default is null
     // note this wraps new exp in parenthesis. "expression" parameter must have this type
     // could write C statements. Returns C expression
-    virtual exp_writer_ptr write_member_getref(csu::utf8_string& expression, csu::utf8_string& member_name,
-            std::ostream& output, bool call_virtual=false);
+    virtual C_expression_ptr write_member_getref(C_expression_ptr LHS_exp, csu::utf8_string& member_name,
+            Csource_out_ptr output, bool call_virtual=false);
 
     // LHS setter (for top level of LHS reference)
      // checks if a member can be set. RHS_type is for checking validity, if null, do not check
-     // only returns null if problem, not print error  (what is it returning when good??? type of WHAT?)
+     // only returns null if problem, not print error
      // if RHS_type is null and member exists, return member type
      // if RHS_type is non-null, return member type if RHS type can be assinged to this member, else null
      // return null if member does not exist, or RHS is not null and cannot be assigned to this member
-    virtual varType_ptr set_member(csu::utf8_string& member_name, varType* RHS_type=nullptr);
+    virtual varType_ptr set_member(csu::utf8_string& member_name, varType_ptr RHS_type=nullptr){ return nullptr; }
     // set a member to a RHS. note that LHS_expression should return THIS object, not the member
-// make possibly virtual
-    virtual void write_member_setter(expression_AST_node* exp_AST_node, csu::utf8_string& LHS_expression, csu::utf8_string& member_name,
-             varType* RHS_type, csu::utf8_string& RHS_expression, std::ostream& output, bool call_virtual=false){}
+    virtual void write_member_setter(C_expression_ptr LHS_expression, csu::utf8_string& member_name,
+             C_expression_ptr RHS_expression, Csource_out_ptr output, bool call_virtual=false){}
 
 
 
     /// CONSTRUCTORS ///
     // does nothing if no default constructor
-    virtual void write_default_constructor(csu::utf8_string& var_name, std::ostream& output){}
+    virtual void write_default_constructor(csu::utf8_string& var_name, Csource_out_ptr output){}
 
 // for explicit construction. Will do implicit construction if explicit is not available
-    virtual bool has_explicit_constructor(call_argument_list* argument_node_ptr, csu::utf8_string& error_msg);
-    virtual void write_explicit_constructor(call_argument_list* argument_node, csu::utf8_string& LHS_Cexp,
-                        std::vector<csu::utf8_string>& argument_Cexpressions, std::ostream& output);
+    virtual bool has_explicit_constructor(function_argument_types_ptr argument_types, csu::utf8_string& error_msg);
+    virtual void write_explicit_constructor(function_argument_types_ptr argument_types, C_expression_ptr LHS_Cexp,
+                        std::vector<C_expression_ptr>& argument_Cexpressions, Csource_out_ptr output);
+
+    virtual bool has_explicit_copy_constructor(varType_ptr RHS_type, csu::utf8_string& error_msg); // convience for when only one argument.
+    virtual void write_explicit_copy_constructor(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                                             Csource_out_ptr output);
 
 
-    virtual bool has_implicit_copy_constructor(varType* RHS_type){ return false; }
-    virtual void write_implicit_copy_constructor(varType* RHS_type, expression_AST_node* RHS_AST_node, csu::utf8_string& LHS,
-                        csu::utf8_string& RHS_exp, std::ostream& output);
+// cast_behavior is needed to avoided infinite do_loops
+    virtual bool has_implicit_copy_constructor(varType_ptr RHS_type, cast_enum cast_behavior=cast_enum::implicit_casts){ return false; }
+    virtual void write_implicit_copy_constructor( C_expression_ptr LHS, C_expression_ptr RHS_exp,
+                                            Csource_out_ptr output, cast_enum cast_behavior=cast_enum::implicit_casts);
 
 
 
     /// DESTRUCTOR ///
-    virtual void write_destructor(csu::utf8_string& var_name, std::ostream& output, bool call_virtual=false){}
+    virtual void write_destructor(csu::utf8_string& var_name, Csource_out_ptr output, bool call_virtual=false){}
 
 
 
     /// CASTING ///
 // these act like copy constructors on the LHS. Therefore the LHS should not be constructed
 // can NOT be used in place of assignment
-    virtual bool can_implicit_castTo(varType* LHS_type){return false; }
-    // does write ';'.
-    virtual void write_implicit_castTo(varType* LHS_type, expression_AST_node* RHS_AST_node, csu::utf8_string& LHS, csu::utf8_string& RHS_exp,
-                std::ostream& output, bool call_virtual=false){}
+    virtual bool can_implicit_castTo(varType_ptr LHS_type){return false; }
+    virtual void write_implicit_castTo(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                Csource_out_ptr output, bool call_virtual=false){}
 
+// this should try to call implicit casting first.
+// by default this will just call implicit castTo
+    virtual bool can_explicit_castTo(varType_ptr LHS_type){return can_implicit_castTo(LHS_type); }
+    // does write ';'.
+    virtual void write_explicit_castTo(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                Csource_out_ptr output, bool call_virtual=false)
+                {  write_implicit_castTo( LHS_exp, RHS_exp, output, call_virtual); }
+
+
+
+    /// interactions with C ///
+    // return type when "cast" to c-type. return null if not possible (default)
+    // can return self if already a useful c-type
+    virtual varType_ptr can_toC(){ return nullptr; }
+    virtual C_expression_ptr toC(C_expression_ptr exp, Csource_out_ptr output, bool call_virtual=false);
 };
 
     // Note that
@@ -296,17 +405,10 @@ public:
         is_ordered = false;
     }
 
-    varType_ptr copy(csu::utf8_string _definition_name="" ) override
-    {
-        return std::make_shared<void_type>();
-    }
-
-    bool is_equivalent(varType* RHS) override
+    bool is_equivalent(varType_ptr RHS) override
         { return RHS->definition_name=="void"; }
 
     bool can_be_defined() override { return true; } // ... don't ask ....
-    bool get_has_LHSaddition(varType* RHS_type) override { return false; }
-    bool get_has_assignment(varType* RHS_type) override { return false; }
 };
 
 // Ctype is weird. Will record whenever a get_has* function is called, and always return true.
@@ -316,60 +418,202 @@ class varType_fromC : public varType
 {
 
 public:
-    std::weak_ptr<varType> self;// this needs to be depreciated
     std::weak_ptr<varType> unnamed_C_type;// this MUST be set!
 
 
     varType_fromC();
-    void set_pointers(std::weak_ptr<varType> _self, std::weak_ptr<varType> _unnamed_C_type);
+    void set_pointers( std::weak_ptr<varType> _unnamed_C_type);
 
-    bool is_equivalent(varType* RHS) override;
-    varType_ptr copy(csu::utf8_string _definition_name="" ) override;
+    bool is_equivalent(varType_ptr RHS) override;
 
     /// CALLING ///
-    //bool is_callable() override { return true; }
-    //funcCallWriter_ptr get_resolved_call(argumentList_AST_ptr argument_list) override;
-
-    varType_ptr is_callable(call_argument_list* argument_node_ptr, csu::utf8_string& error_msg) override;
-    exp_writer_ptr write_call(call_argument_list* argument_node, exp_writer_ptr LHS_Cexp,
-        std::vector<csu::utf8_string>& argument_Cexpressions, std::ostream& output, bool call_virtual=false) override;
-
+    varType_ptr is_callable(function_argument_types_ptr argument_types, csu::utf8_string& error_msg,
+                                    cast_enum cast_behavior=cast_enum::implicit_casts) override;
+    C_expression_ptr write_call(function_argument_types_ptr argument_types, C_expression_ptr LHS_Cexp,
+            std::vector<C_expression_ptr>& argument_Cexpressions, Csource_out_ptr output, bool call_virtual=false,
+                                    cast_enum cast_behavior=cast_enum::implicit_casts) override;
 
 
-    /// ADDITION /// we can add all C types
-    bool get_has_LHSaddition(varType* RHS_type) override;
-    varType_ptr get_LHSaddition_type(varType* RHS_type) override;
-    exp_writer_ptr write_LHSaddition(expression_AST_ptr LHS_ast, csu::utf8_string& LHS_exp, expression_AST_ptr RHS_ast,
-        csu::utf8_string& RHS_exp, std::ostream& output, bool call_virtual=false) override;
+
+    /// BINARY OPERATORS ///
+    // MATH
+    // we use the same rules for all binary operators
+    varType_ptr has_binOperator(varType_ptr RHS_type);
+    C_expression_ptr write_LHSoperator(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, const char* op);
+    C_expression_ptr write_RHSoperator(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, const char* op);
+
+          // power
+//    varType_ptr get_has_LHSpower(varType_ptr RHS_type) override { return has_binOperator(RHS_type); }
+//    C_expression_ptr write_LHSpower(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+//                              Csource_out_ptr output, bool call_virtual=false) override
+//                              { return write_LHSoperator(LHS_exp, RHS_exp, output, "**"); }
+//
+//    varType_ptr get_has_RHSpower(varType_ptr LHS_type) override { return has_binOperator(LHS_type); }
+//    C_expression_ptr write_RHSpower(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+//                              Csource_out_ptr output, bool call_virtual=false) override
+//                              { return write_RHSoperator(LHS_exp, RHS_exp, output, "**"); }
+      // multiplication
+    varType_ptr get_has_LHSmultiplication(varType_ptr RHS_type) override { return has_binOperator(RHS_type); }
+    C_expression_ptr write_LHSmultiplication(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false)override
+                              { return write_LHSoperator(LHS_exp, RHS_exp, output, "*"); }
+
+    varType_ptr get_has_RHSmultiplication(varType_ptr LHS_type) override { return has_binOperator(LHS_type); }
+    C_expression_ptr write_RHSmultiplication(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false)override
+                              { return write_RHSoperator(LHS_exp, RHS_exp, output, "*"); }
+      // division
+    varType_ptr get_has_LHSdivision(varType_ptr RHS_type) override { return has_binOperator(RHS_type); }
+    C_expression_ptr write_LHSdivision(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false)override
+                              { return write_LHSoperator(LHS_exp, RHS_exp, output, "/"); }
+
+    varType_ptr get_has_RHSdivision(varType_ptr LHS_type) override { return has_binOperator(LHS_type); }
+    C_expression_ptr write_RHSdivision(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false)override
+                              { return write_RHSoperator(LHS_exp, RHS_exp, output, "/"); }
+      // modulus
+    varType_ptr get_has_LHSmodulus(varType_ptr RHS_type) override { return has_binOperator(RHS_type); }
+    C_expression_ptr write_LHSmodulus(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false)override
+                              { return write_LHSoperator(LHS_exp, RHS_exp, output, "%"); }
+
+    varType_ptr get_has_RHSmodulus(varType_ptr LHS_type) override { return has_binOperator(LHS_type); }
+    C_expression_ptr write_RHSmodulus(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false)override
+                              { return write_RHSoperator(LHS_exp, RHS_exp, output, "%"); }
+      // addition
+    varType_ptr get_has_LHSaddition(varType_ptr RHS_type) override { return has_binOperator(RHS_type); }
+    C_expression_ptr write_LHSaddition(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false)override
+                              { return write_LHSoperator(LHS_exp, RHS_exp, output, "+"); }
+
+    varType_ptr get_has_RHSaddition(varType_ptr LHS_type) override { return has_binOperator(LHS_type); }
+    C_expression_ptr write_RHSaddition(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false)override
+                              { return write_RHSoperator(LHS_exp, RHS_exp, output, "+"); }
+      // subtraction
+    varType_ptr get_has_LHSsubtraction(varType_ptr RHS_type) override { return has_binOperator(RHS_type); }
+    C_expression_ptr write_LHSsubtraction(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false)override
+                              { return write_LHSoperator(LHS_exp, RHS_exp, output, "-"); }
+
+    varType_ptr get_has_RHSsubtraction(varType_ptr LHS_type) override { return has_binOperator(LHS_type); }
+    C_expression_ptr write_RHSsubtraction(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false)override
+                              { return write_RHSoperator(LHS_exp, RHS_exp, output, "-"); }
+    // COMPARISON
+      // lessThan
+    varType_ptr get_has_LHSlessThan(varType_ptr RHS_type) override { return has_binOperator(RHS_type); }
+    C_expression_ptr write_LHSlessThan(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false)override
+                              { return write_LHSoperator(LHS_exp, RHS_exp, output, "<"); }
+
+    varType_ptr get_has_RHSlessThan(varType_ptr LHS_type) override { return has_binOperator(LHS_type); }
+    C_expression_ptr write_RHSlessThan(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false)override
+                              { return write_RHSoperator(LHS_exp, RHS_exp, output, "<"); }
+      // greatThan
+    varType_ptr get_has_LHSgreatThan(varType_ptr RHS_type) override { return has_binOperator(RHS_type); }
+    C_expression_ptr write_LHSgreatThan(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false)override
+                              { return write_LHSoperator(LHS_exp, RHS_exp, output, ">"); }
+
+    varType_ptr get_has_RHSgreatThan(varType_ptr LHS_type) override { return has_binOperator(LHS_type); }
+    C_expression_ptr write_RHSgreatThan(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false)override
+                              { return write_RHSoperator(LHS_exp, RHS_exp, output, ">"); }
+      // equalTo
+    varType_ptr get_has_LHSequalTo(varType_ptr RHS_type) override { return has_binOperator(RHS_type); }
+    C_expression_ptr write_LHSequalTo(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false)override
+                              { return write_LHSoperator(LHS_exp, RHS_exp, output, "=="); }
+
+    varType_ptr get_has_RHSequalTo(varType_ptr LHS_type) override { return has_binOperator(LHS_type); }
+    C_expression_ptr write_RHSequalTo(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false)override
+                              { return write_RHSoperator(LHS_exp, RHS_exp, output, "=="); }
+      // notEqual
+    varType_ptr get_has_LHSnotEqual(varType_ptr RHS_type) override { return has_binOperator(RHS_type); }
+    C_expression_ptr write_LHSnotEqual(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false)override
+                              { return write_LHSoperator(LHS_exp, RHS_exp, output, "!="); }
+
+    varType_ptr get_has_RHSnotEqual(varType_ptr LHS_type) override { return has_binOperator(LHS_type); }
+    C_expression_ptr write_RHSnotEqual(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false)override
+                              { return write_RHSoperator(LHS_exp, RHS_exp, output, "!="); }
+      // lessEqual
+    varType_ptr get_has_LHSlessEqual(varType_ptr RHS_type) override { return has_binOperator(RHS_type); }
+    C_expression_ptr write_LHSlessEqual(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false)override
+                              { return write_LHSoperator(LHS_exp, RHS_exp, output, "<="); }
+
+    varType_ptr get_has_RHSlessEqual(varType_ptr LHS_type) override { return has_binOperator(LHS_type); }
+    C_expression_ptr write_RHSlessEqual(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false)override
+                              { return write_RHSoperator(LHS_exp, RHS_exp, output, "<="); }
+      // greatEqual
+    varType_ptr get_has_LHSgreatEqual(varType_ptr RHS_type) override { return has_binOperator(RHS_type); }
+    C_expression_ptr write_LHSgreatEqual(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false)override
+                              { return write_LHSoperator(LHS_exp, RHS_exp, output, ">="); }
+
+    varType_ptr get_has_RHSgreatEqual(varType_ptr LHS_type) override { return has_binOperator(LHS_type); }
+    C_expression_ptr write_RHSgreatEqual(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false)override
+                              { return write_RHSoperator(LHS_exp, RHS_exp, output, ">="); }
+
+
+
+
 
     /// ASSIGNMENT /// we can assign from all C types
-    bool get_has_assignment(varType* RHS_type) override;
-    void write_assignment(varType* RHS_type, expression_AST_node* RHS_AST_node,
-                                  csu::utf8_string& LHS, csu::utf8_string& RHS_exp, std::ostream& output) override;
+    bool get_has_assignment(varType_ptr RHS_type) override;
+    void write_assignment(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                            Csource_out_ptr output, bool call_virtual=false) override;
 
-    std::shared_ptr<varType> get_auto_type() override;
+    varType_ptr get_auto_type() override { return shared_from_this(); }
 
     /// CONSTRUCTOR ///
-    bool has_explicit_constructor(call_argument_list* argument_node_ptr, csu::utf8_string& error_msg) override;
-    void write_explicit_constructor(call_argument_list* argument_node, csu::utf8_string& LHS_Cexp, std::vector<csu::utf8_string>& argument_Cexpressions, std::ostream& output) override;
+    bool has_explicit_constructor(function_argument_types_ptr argument_types, csu::utf8_string& error_msg) override;
+    void write_explicit_constructor(function_argument_types_ptr argument_types, C_expression_ptr LHS_Cexp,
+                        std::vector<C_expression_ptr>& argument_Cexpressions, Csource_out_ptr output) override;
+
+    bool has_explicit_copy_constructor(varType_ptr RHS_type, csu::utf8_string& error_msg) override;
+    void write_explicit_copy_constructor(C_expression_ptr LHS_exp,
+                        C_expression_ptr RHS_exp, Csource_out_ptr output) override;
 
     // can implicit copy only same type
-    bool has_implicit_copy_constructor(varType* RHS_type) override;
+    bool has_implicit_copy_constructor(varType_ptr RHS_type, cast_enum cast_behavior=cast_enum::implicit_casts) override;
+    void write_implicit_copy_constructor( C_expression_ptr LHS, C_expression_ptr RHS_exp,
+                                            Csource_out_ptr output, cast_enum cast_behavior=cast_enum::implicit_casts) override;
 
-    void write_implicit_copy_constructor(varType* RHS_type, expression_AST_node* RHS_AST_node, csu::utf8_string& LHS, csu::utf8_string& RHS_exp, std::ostream& output) override;
+
+
+    /// interactions with C ///
+    varType_ptr can_toC() override { return shared_from_this(); }
+    C_expression_ptr toC(C_expression_ptr exp, Csource_out_ptr output, bool call_virtual=false) override
+    { return  std::make_shared<simple_C_expression>(exp->get_C_expression(), shared_from_this(), false, false); }
 };
 
 class raw_C_pointer_reference : public varType
 // provides a reference to anouther variable of some type. Used for cyth internals, not in the symbol table
 // one use is the "self" variable in methods
 {
+private:
+    // given C_expression_ptr (exp) of this type (which is a pointer), return a C_expression_ptr of the referenced type
+    C_expression_ptr deref(C_expression_ptr exp);
+
 public:
     enum assignment_mode_t
     {
         empty,
         no_assignment, // cannot assign to this pointer, default
-        only_reference_assignment, // can assign if RHS is also a pointer-like thing
-        take_reference_assignment, // takes reference of the RHS. Errors if RHS cannot be referenced
+        only_reference_assignment, // can assign if RHS is also a pointer-like thing ; can do pointer casting to parent type
+        take_reference_assignment, // takes reference of the RHS. Errors if RHS cannot be referenced ; can do pointer casting to parent type
         full_assign_assignment, // call underlying assignment operator
     };
 
@@ -380,83 +624,190 @@ public:
     raw_C_pointer_reference(varType_ptr _ref_type); // default assignment
     raw_C_pointer_reference(varType_ptr _ref_type, assignment_mode_t _assignment_node);
 
-    bool is_equivalent(varType* RHS) override;
-    varType_ptr copy(csu::utf8_string _definition_name="" ) override;
+    bool is_equivalent(varType_ptr RHS) override;
 
     /// DEFINITION /// hope this works!
-    bool can_be_defined() override;
-    void C_definition_name(csu::utf8_string& var_name, std::ostream& output) override;
+    void C_definition_name(csu::utf8_string& var_name, Csource_out_ptr output) override;
 
     /// CALLING /// just call underlying functions with no modification. Hope it works!
-    varType_ptr is_callable(call_argument_list* argument_node_ptr, csu::utf8_string& error_msg) override;
+    varType_ptr is_callable(function_argument_types_ptr argument_types, csu::utf8_string& error_msg,
+                                    cast_enum cast_behavior=cast_enum::implicit_casts) override;
 
-    exp_writer_ptr write_call(call_argument_list* argument_node, exp_writer_ptr LHS_Cexp,
-        std::vector<csu::utf8_string>& argument_Cexpressions, std::ostream& output, bool call_virtual=false) override;
+    C_expression_ptr write_call(function_argument_types_ptr argument_types, C_expression_ptr LHS_Cexp,
+            std::vector<C_expression_ptr>& argument_Cexpressions, Csource_out_ptr output, bool call_virtual=false,
+                                    cast_enum cast_behavior=cast_enum::implicit_casts) override;
 
 
     /// Reference stuff ///
     varType_ptr is_reference_type(bool &is_ref) override; // can return nullptr if can reference general types
-    bool can_take_reference(varType* RHS_type) override; // must return true at least for the type returned by is_reference_type
-    void take_reference(varType* RHS_type, csu::utf8_string& LHS, csu::utf8_string& referencable_RHS_exp, std::ostream& output) override;
+    bool can_take_reference(varType_ptr RHS_type) override; // must return true at least for the type returned by is_reference_type
+    void take_reference(C_expression_ptr LHS_exp, C_expression_ptr referencable_RHS_exp, Csource_out_ptr output) override;
+    bool needs_external_memory() override { return true; }
 
-    bool can_get_pointer(varType* output_type) override; // in general, should return true for equivlent type, at least
+    bool can_get_pointer(varType_ptr output_type) override; // in general, should return true for equivlent type, at least
     // return C expression should be pointer to output_type
-    csu::utf8_string get_pointer(varType* output_type, csu::utf8_string& exp, std::ostream& output) override;
-
-    bool is_static_type(){ return false; }
+    csu::utf8_string get_pointer(varType_ptr output_type, csu::utf8_string& exp, Csource_out_ptr output) override;
 
 
-    /// ADDITION /// calls underlying functions, and just de-references LHS name
-    bool get_has_LHSaddition(varType* RHS_type) override;
-    varType_ptr get_LHSaddition_type(varType* RHS_type) override;
-    exp_writer_ptr write_LHSaddition(expression_AST_ptr LHS_ast, csu::utf8_string& LHS_exp, expression_AST_ptr RHS_ast,
-         csu::utf8_string& RHS_exp, std::ostream& output, bool call_virtual=false) override;
+
+    /// BINARY OPERATORS /// calls underlying functions, and just de-references LHS name
+      // power
+    varType_ptr get_has_LHSpower(varType_ptr RHS_type) override;
+    C_expression_ptr write_LHSpower(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false) override;
+    varType_ptr get_has_RHSpower(varType_ptr LHS_type) override;
+    C_expression_ptr write_RHSpower(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false) override;
+      // multiplication
+    varType_ptr get_has_LHSmultiplication(varType_ptr RHS_type) override;
+    C_expression_ptr write_LHSmultiplication(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false) override;
+    varType_ptr get_has_RHSmultiplication(varType_ptr LHS_type) override;
+    C_expression_ptr write_RHSmultiplication(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false) override;
+      // division
+    varType_ptr get_has_LHSdivision(varType_ptr RHS_type) override;
+    C_expression_ptr write_LHSdivision(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false) override;
+    varType_ptr get_has_RHSdivision(varType_ptr LHS_type) override;
+    C_expression_ptr write_RHSdivision(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false) override;
+      // modulus
+    varType_ptr get_has_LHSmodulus(varType_ptr RHS_type) override;
+    C_expression_ptr write_LHSmodulus(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false) override;
+    varType_ptr get_has_RHSmodulus(varType_ptr LHS_type) override;
+    C_expression_ptr write_RHSmodulus(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false) override;
+      // addition
+    varType_ptr get_has_LHSaddition(varType_ptr RHS_type) override;
+    C_expression_ptr write_LHSaddition(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false) override;
+    varType_ptr get_has_RHSaddition(varType_ptr LHS_type) override;
+    C_expression_ptr write_RHSaddition(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false) override;
+      // subtraction
+    varType_ptr get_has_LHSsubtraction(varType_ptr RHS_type) override;
+    C_expression_ptr write_LHSsubtraction(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false) override;
+    varType_ptr get_has_RHSsubtraction(varType_ptr LHS_type) override;
+    C_expression_ptr write_RHSsubtraction(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false) override;
+
+      // lessThan
+    varType_ptr get_has_LHSlessThan(varType_ptr RHS_type) override;
+    C_expression_ptr write_LHSlessThan(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false) override;
+    varType_ptr get_has_RHSlessThan(varType_ptr LHS_type) override;
+    C_expression_ptr write_RHSlessThan(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false) override;
+      // greatThan
+    varType_ptr get_has_LHSgreatThan(varType_ptr RHS_type) override;
+    C_expression_ptr write_LHSgreatThan(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false) override;
+    varType_ptr get_has_RHSgreatThan(varType_ptr LHS_type) override;
+    C_expression_ptr write_RHSgreatThan(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false) override;
+      // equalTo
+    varType_ptr get_has_LHSequalTo(varType_ptr RHS_type) override;
+    C_expression_ptr write_LHSequalTo(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false) override;
+    varType_ptr get_has_RHSequalTo(varType_ptr LHS_type) override;
+    C_expression_ptr write_RHSequalTo(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false) override;
+      // notEqual
+    varType_ptr get_has_LHSnotEqual(varType_ptr RHS_type) override;
+    C_expression_ptr write_LHSnotEqual(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false) override;
+    varType_ptr get_has_RHSnotEqual(varType_ptr LHS_type) override;
+    C_expression_ptr write_RHSnotEqual(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false) override;
+      // lessEqual
+    varType_ptr get_has_LHSlessEqual(varType_ptr RHS_type) override;
+    C_expression_ptr write_LHSlessEqual(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false) override;
+    varType_ptr get_has_RHSlessEqual(varType_ptr LHS_type) override;
+    C_expression_ptr write_RHSlessEqual(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false) override;
+      // greatEqual
+    varType_ptr get_has_LHSgreatEqual(varType_ptr RHS_type) override;
+    C_expression_ptr write_LHSgreatEqual(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false) override;
+    varType_ptr get_has_RHSgreatEqual(varType_ptr LHS_type) override;
+    C_expression_ptr write_RHSgreatEqual(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false) override;
+
+
 
 
     /// ASSIGNMENT /// again just wraps over reference type, and dereferences LHS when appropriate.
-    bool get_has_assignment(varType* RHS_type) override;
-    void write_assignment(varType* RHS_type, expression_AST_node* RHS_AST_node,
-                                  csu::utf8_string& LHS, csu::utf8_string& RHS_exp, std::ostream& output) override;
+    bool get_has_assignment(varType_ptr RHS_type) override;
+    void write_assignment(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                            Csource_out_ptr output, bool call_virtual=false) override;
 
-    bool get_has_assignTo(varType* LHS_type) override;
-    void write_assignTo(varType* LHS_type, expression_AST_node* RHS_AST_node, csu::utf8_string& LHS,
-                        csu::utf8_string& RHS_exp, std::ostream& output, bool call_virtual=false) override;
+    bool get_has_assignTo(varType_ptr LHS_type) override;
+    void write_assignTo(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                            Csource_out_ptr output, bool call_virtual=false) override;
 
 // TODO: auto!
 
     /// CLASS THINGS /// again, mimics underlying type with dereferencing
     /// members
     varType_ptr member_has_getter(csu::utf8_string& member_name) override;
-    exp_writer_ptr write_member_getter(csu::utf8_string& expression, csu::utf8_string& member_name,
-                    std::ostream& output, bool call_virtual=false) override ;
+    C_expression_ptr write_member_getter(C_expression_ptr LHS_exp, csu::utf8_string& member_name,
+            Csource_out_ptr output, bool call_virtual=false) override ;
 
     varType_ptr member_has_getref(csu::utf8_string& member_name) override;
-    exp_writer_ptr write_member_getref(csu::utf8_string& expression, csu::utf8_string& member_name,
-            std::ostream& output, bool call_virtual=false) override;
+    C_expression_ptr write_member_getref(C_expression_ptr LHS_exp, csu::utf8_string& member_name,
+            Csource_out_ptr output, bool call_virtual=false) override;
 
-    varType_ptr set_member(csu::utf8_string& member_name, varType* RHS_type=nullptr) override;
+    varType_ptr set_member(csu::utf8_string& member_name, varType_ptr RHS_type=nullptr) override;
 
-    void write_member_setter(expression_AST_node* exp_AST_node, csu::utf8_string& LHS_expression, csu::utf8_string& member_name,
-             varType* RHS_type, csu::utf8_string& RHS_expression, std::ostream& output, bool call_virtual=false) override;
+    void write_member_setter(C_expression_ptr LHS_expression, csu::utf8_string& member_name,
+             C_expression_ptr RHS_expression, Csource_out_ptr output, bool call_virtual=false) override;
 
     /// CONSTRUCTORS ///
-
-    // takes reference of RHS when possible.
-    bool has_implicit_copy_constructor(varType* RHS_type) override;
-    void write_implicit_copy_constructor(varType* RHS_type, expression_AST_node* RHS_AST_node,
-                                         csu::utf8_string& LHS, csu::utf8_string& RHS_exp, std::ostream& output) override;
+// this constructs in place. Assumes this already has memory!
+    bool has_implicit_copy_constructor(varType_ptr RHS_type, cast_enum cast_behavior=cast_enum::implicit_casts) override;
+    void write_implicit_copy_constructor( C_expression_ptr LHS, C_expression_ptr RHS_exp,
+                                            Csource_out_ptr output, cast_enum cast_behavior=cast_enum::implicit_casts) override;
 
 
     /// CASTING ///
 // TODO: this is weird. Need actual casting!
-    bool can_implicit_castTo(varType* LHS_type) override;
-    void write_implicit_castTo(varType* LHS_type, expression_AST_node* RHS_AST_node, csu::utf8_string& LHS, csu::utf8_string& RHS_exp,
-                std::ostream& output, bool call_virtual=false) override;
+    bool can_implicit_castTo(varType_ptr LHS_type) override;
+    void write_implicit_castTo(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                Csource_out_ptr output, bool call_virtual=false) override;
+
+    bool can_explicit_castTo(varType_ptr LHS_type) override;
+    void write_explicit_castTo(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                Csource_out_ptr output, bool call_virtual=false) override;
+
+
+    /// interactions with C ///
+    varType_ptr can_toC();
+    C_expression_ptr toC(C_expression_ptr exp, Csource_out_ptr output, bool call_virtual=false);
 };
 typedef std::shared_ptr<raw_C_pointer_reference> CPntrRef_ptr;
 
 
+
+
+class function_argument_types
+// defined where a function is called
+{
+public:
+    std::vector< varType_ptr > unnamed_argument_types;
+    std::vector< csu::utf8_string > named_argument_names;
+    std::vector< varType_ptr > named_argument_types;
+
+    varType_ptr type_from_index( int index );
+
+    void print(std::ostream& output);
+}; //pntr typ: function_argument_types_ptr
+
 class func_parameter_info
+// defined where a function is defined
 {
 public:
     std::vector<varName_ptr> required_parameters;
@@ -468,42 +819,35 @@ public:
     // returns -1 if name not in parameters.
 
     // if two functions with same names names in same scope have these parameters, could they be distinguished
-    bool is_equivalent(func_parameter_info* RHS);
-    bool is_distinguishable(std::shared_ptr<func_parameter_info> other_parameters); // simply not is_equivalent. Hoepfully stays that simple, but don't assume
+    bool is_equivalent(func_param_ptr RHS);
+    bool is_distinguishable(func_param_ptr other_parameters); // simply not is_equivalent. Hoepfully stays that simple, but don't assume
 
 
-    void write_to_C(std::ostream& output, bool write_void_for_zero_params=false);// does NOT include parenthesis.
+    void write_to_C(Csource_out_ptr output, bool write_void_for_zero_params=false);// does NOT include parenthesis.
     void print(std::ostream& output);
-};
+}; //pntr typ: func_param_ptr
+
+
 
 class parameter_to_arguments_mapper
 {
+
     void initialize();
 public:
-    class argument_wrapper
-    {
-    public:
-        std::vector<expression_AST_node*> unnamed_arguments;
-        std::vector<csu::utf8_string> named_argument_names;
-        std::vector<expression_AST_node*> named_arguments;
+// remember: parameter is defined in function, argument defined by call
 
-        int total_size();
-        void print(std::ostream& output);
-        expression_AST_node* expression_from_index(int i);
+// set by constructor
+    func_param_ptr parameters;
+    function_argument_types_ptr arguments;
+    cast_enum cast_mode;
 
-        argument_wrapper(call_argument_list* argument_node_ptr);
-        argument_wrapper( std::vector<expression_AST_node*> &expressions);
-    };
-
+// set by initialize() (private above. assumes constructor is set)
 
     //each value is the index of argument to use. -1 means use default parameters.
     // index is the index of the parameter
     // -2 means index is un-mapped. Should not have if is_good is true
     std::vector<int> param_to_arg_map;
 
-    func_param_ptr parameters;
-    argument_wrapper arguments;
-    sym_table_base* symbol_table;
 
     bool is_good;
     int num_defaults_used; // smaller is better
@@ -512,23 +856,25 @@ public:
 
     csu::utf8_string error; // set if is_good is false;
 
-    std::vector<csu::utf8_string> names_to_cleanup;
-    std::vector<varType*> types_to_cleanup;
+// set by write_arguments:
+    //std::vector<C_expression_ptr> cleanups;
 
-    parameter_to_arguments_mapper(func_param_ptr _parameters, call_argument_list* _argument_node_ptr);
-    parameter_to_arguments_mapper(func_param_ptr _parameters, std::vector<expression_AST_node*> &expressions, sym_table_base* _symbol_table);
 
+// now the public interface:
+    // NOTE: explicit casting not allowed, will error!
+    parameter_to_arguments_mapper(func_param_ptr _parameters, function_argument_types_ptr _arguments,
+                                  cast_enum cast_behavior=cast_enum::implicit_casts);
 
     // returns 1 if this map is preferred. 0 if they are equal, -1 if other is prefered.
     // does not check is_good
-    int comparison(std::shared_ptr<parameter_to_arguments_mapper> RHS);
+    int comparison(parm_arg_map_ptr RHS);
 
-    void write_arguments( std::vector<csu::utf8_string>& argument_Cexpressions,
-                          std::vector<csu::utf8_string> &out, std::ostream& output);
+    // this does all the conversions and whatnot to convert given cyth expressions to what is really needed to call function
+    void write_arguments( std::vector<C_expression_ptr> &argument_Cexpressions,
+                          std::vector<C_expression_ptr> &out_expressions, Csource_out_ptr output);
 
-    void write_cleanup( std::ostream& output ); // need to call this to call destructors
-};
-
+//void write_cleanup( Csource_out_ptr output ); // need to call this to call destructors
+}; // smart pntr type: parm_arg_map_ptr
 
 
 // TODO: replace this with fancy implicit concepts
@@ -537,34 +883,33 @@ class staticFuncPntr : public varType
 {
 public:
     // assume, loc, and is_ordered, will be set
-    std::weak_ptr<staticFuncPntr> self; // assume this gets set too. should be depreciated!
     func_param_ptr parameters; // assume set externally as well
     varType_ptr return_type; // set externally. assume always known from definition.
 
     staticFuncPntr();
 
-    bool is_equivalent(varType* RHS) override;
-    varType_ptr copy(csu::utf8_string _definition_name="" ) override;
+    bool is_equivalent(varType_ptr RHS) override;
+    //varType_ptr copy(csu::utf8_string _definition_name="" ) override;
 
     /// CALLING ///
-    varType_ptr is_callable(call_argument_list* argument_node_ptr, csu::utf8_string& error_msg) override;
+    varType_ptr is_callable(function_argument_types_ptr argument_types, csu::utf8_string& error_msg,
+                                    cast_enum cast_behavior=cast_enum::implicit_casts) override;
 
-    exp_writer_ptr write_call(call_argument_list* argument_node, exp_writer_ptr LHS_Cexp,
-        std::vector<csu::utf8_string>& argument_Cexpressions, std::ostream& output, bool call_virtual=false) override;
+    C_expression_ptr write_call(function_argument_types_ptr argument_types, C_expression_ptr LHS_Cexp,
+            std::vector<C_expression_ptr>& argument_Cexpressions, Csource_out_ptr output, bool call_virtual=false,
+                                    cast_enum cast_behavior=cast_enum::implicit_casts) override;
 
 
     /// ASSIGNMENT /// assign from other func-pointers with same signiture
-    bool get_has_assignment(varType* RHS_type) override; // can only assign to equivalent types. in future should be able to cast?
-    void write_assignment(varType* RHS_type, expression_AST_node* RHS_AST_node,
-                                  csu::utf8_string& LHS, csu::utf8_string& RHS_exp, std::ostream& output) override;
-    std::shared_ptr<varType> get_auto_type() override;
+    bool get_has_assignment(varType_ptr RHS_type) override;
+    void write_assignment(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                            Csource_out_ptr output, bool call_virtual=false) override;
+
+    varType_ptr get_auto_type() override;
 
     /// DEFINITION ///
     bool can_be_defined() override { return true; }
-    void C_definition_name(csu::utf8_string& var_name, std::ostream& output) override;
-
-
-    /// ADDITION /// can't do this
+    void C_definition_name(csu::utf8_string& var_name, Csource_out_ptr output) override;
 
 };
 
@@ -582,7 +927,7 @@ public:
         func_param_ptr parameters;
         varType_ptr return_type;
 
-        void write_C_prototype(std::ostream& output);
+        void write_C_prototype(Csource_out_ptr output);
     };
     typedef std::shared_ptr<resolved_func> ResolvedFunction_ptr;
 
@@ -599,18 +944,18 @@ public:
     void define_overload_return(ResolvedFunction_ptr overload, varType_ptr _return_type);
 
     /// basic type stuff//
-    bool is_equivalent(varType* RHS) override {return false;}
+    bool is_equivalent(varType_ptr RHS){return false;}
     bool type_is_fully_defined() override { return all_overloads_defined; }
 
-    varType_ptr copy(csu::utf8_string _definition_name="" ) override;
-
     /// CALLING ///
-    resolved_pair get_resolution(call_argument_list* argument_node_ptr, csu::utf8_string& error_msg);
+    resolved_pair get_resolution(function_argument_types_ptr argument_types, csu::utf8_string& error_msg, cast_enum cast_behavior);
 
-    varType_ptr is_callable(call_argument_list* argument_node_ptr, csu::utf8_string& error_msg) override;
+    varType_ptr is_callable(function_argument_types_ptr argument_types, csu::utf8_string& error_msg,
+                                    cast_enum cast_behavior=cast_enum::implicit_casts) override;
 
-    exp_writer_ptr write_call(call_argument_list* argument_node, exp_writer_ptr LHS_Cexp,
-        std::vector<csu::utf8_string>& argument_Cexpressions, std::ostream& output, bool call_virtual=false) override;
+    C_expression_ptr write_call(function_argument_types_ptr argument_types, C_expression_ptr LHS_Cexp,
+            std::vector<C_expression_ptr>& argument_Cexpressions, Csource_out_ptr output, bool call_virtual=false,
+                                    cast_enum cast_behavior=cast_enum::implicit_casts) override;
 
 
 
@@ -620,7 +965,7 @@ public:
     /// ADDITION /// cannot add functions ........ unfortunately...... would be cool though
 
     /// ASSIGNMENT /// cannot assign to defined functions
-    std::shared_ptr<varType> get_auto_type() override; // but we MIGHT have an auto-type
+    varType_ptr get_auto_type() override; // but we MIGHT have an auto-type
     csu::utf8_string single_overload_Cname(); // used for writing to C
 };
 typedef std::shared_ptr<DefFuncType> DefFuncType_ptr;
@@ -629,11 +974,26 @@ typedef std::shared_ptr<DefFuncType> DefFuncType_ptr;
 
 //some rules:
 //    constructors are never virtual or inhereted
-//    assignment operators can be virtual, but not inheretited
+//    assignment operators can be virtual, but not inheretited (this is no longer true I think..)
 //    conversion operators are normal (can be inhereted and virtual).
 
 class MethodType : public varType
 {
+private:
+
+    class method_access_writer : public C_expression
+    // this is needed, because methods are weird.
+    // made by get_C_exp below
+       // not a clue how referencing works here. Will assume not referencable.
+    {
+    public:
+        C_expression_ptr parent_exp; // doesn't  own this ( unless added as cleanup child)
+        bool virtual_call_allowed; // if false, use static call, it true, use virtual call if possible
+
+        csu::utf8_string get_C_expression() {  return ""; }
+    };
+
+
 public:
 
     enum method_type
@@ -646,6 +1006,8 @@ public:
         conversion,
         explicit_conversion,
         assignment,
+        assignTo,
+        inform_moved,
     };
 
     class resolved_method
@@ -675,32 +1037,16 @@ public:
         unsigned int parental_vtable_location;
         std::shared_ptr<resolved_method> overriden_method;
 
-        void write_C_prototype(std::ostream& output);
+        void write_C_prototype(Csource_out_ptr output);
     };
     typedef std::shared_ptr<resolved_method> ResolvedMethod_ptr;
     typedef std::pair< ResolvedMethod_ptr, std::shared_ptr<parameter_to_arguments_mapper> > resolved_pair;
 
 
-    class method_access_writer : public expression_call_writer
-    // this is needed, because methods are weird. note that the "c-expression" should have the type of parent type (type of self_ptr_name, below)
-    {
-    public:
-        csu::utf8_string parent_exp;
-        bool virtual_call_allowed; // if false, use static call, it true, use virtual call if possible
-
-        method_access_writer(csu::utf8_string _parent_exp, bool _virtual_call_allowed) :
-            parent_exp(_parent_exp)
-            { virtual_call_allowed = _virtual_call_allowed; }
-
-        csu::utf8_string get_C_expression() {  return parent_exp; }
-        void write_cleanup(){}
-    };
-
-
-
 
     typedef std::list< ResolvedMethod_ptr >::iterator overloads_iterator;
     std::list< ResolvedMethod_ptr > overloads;
+
     int num_undefined_overloads;
     varName_ptr self_ptr_name; // originally null. Set when we know
     method_type type_of_method;// this can be altered externally
@@ -712,25 +1058,39 @@ public:
     void define_overload_return(ResolvedMethod_ptr overload, varType_ptr _return_type);
 
     /// basic type stuff//
-    bool is_equivalent(varType* RHS) override {return false;}
+    bool is_equivalent(varType_ptr RHS) override {return false;} // is this correct??
     bool type_is_fully_defined() override { return num_undefined_overloads==0; }
 
-    varType_ptr copy(csu::utf8_string _definition_name="" ) override;
-
     /// CALLING ///
-    resolved_pair get_resolution(call_argument_list* argument_node_ptr, csu::utf8_string& error_msg);
-
-    varType_ptr is_callable(call_argument_list* argument_node_ptr, csu::utf8_string& error_msg) override;
-
-    exp_writer_ptr write_call(call_argument_list* argument_node, exp_writer_ptr LHS_Cexp,
-       std::vector<csu::utf8_string>& argument_Cexpressions, std::ostream& output, bool call_virtual=false) override;
-
-//    exp_writer_ptr write_nonvirtual_call(call_argument_list* argument_node,
-//               csu::utf8_string& LHS_Cexp, std::vector<csu::utf8_string>& argument_Cexpressions, std::ostream& output);
+//    resolved_pair get_resolution(call_argument_list* argument_node_ptr, csu::utf8_string& error_msg);
+//    resolved_pair get_resolution(std::vector<expression_AST_node*> &argument_expressions, sym_table_base* _symbol_table, csu::utf8_string& error_msg);
 //
-     exp_writer_ptr write_call(ResolvedMethod_ptr resolved_method, std::vector<expression_AST_node*> &argument_expressions,
-               sym_table_base* _symbol_table, exp_writer_ptr LHS_Cexp, std::vector<csu::utf8_string>& argument_Cexpressions, std::ostream& output);
+//    varType_ptr is_callable(call_argument_list* argument_node_ptr, csu::utf8_string& error_msg) override;
+//
+//    exp_writer_ptr write_call(call_argument_list* argument_node, exp_writer_ptr LHS_Cexp,
+//       std::vector<csu::utf8_string>& argument_Cexpressions, Csource_out_ptr output, bool call_virtual=false) override;
+//
+//     exp_writer_ptr write_call(ResolvedMethod_ptr resolved_method, std::vector<expression_AST_node*> &argument_expressions,
+//               sym_table_base* _symbol_table, exp_writer_ptr LHS_Cexp, std::vector<csu::utf8_string>& argument_Cexpressions, Csource_out_ptr output);
+//
+//     exp_writer_ptr write_call(std::vector<expression_AST_node*> &argument_expressions, sym_table_base* _symbol_table,
+//                    exp_writer_ptr LHS_Cexp, std::vector<csu::utf8_string>& argument_Cexpressions, Csource_out_ptr output);
 
+    resolved_pair get_resolution(function_argument_types_ptr argument_types, csu::utf8_string& error_msg, cast_enum cast_behavior);
+
+    varType_ptr is_callable(function_argument_types_ptr argument_types, csu::utf8_string& error_msg,
+                                    cast_enum cast_behavior=cast_enum::implicit_casts) override;
+
+    // here LHS_exp should have this type (made by get_C_exp below)
+    // note call_virtual is not used (uses info from LHS_Cexp instead)
+    C_expression_ptr write_call(function_argument_types_ptr argument_types, C_expression_ptr LHS_Cexp,
+            std::vector<C_expression_ptr>& argument_Cexpressions, Csource_out_ptr output, bool call_virtual=false,
+                                    cast_enum cast_behavior=cast_enum::implicit_casts) override;
+
+    // shortcut if parent exp is known. Here call_virtual IS used!
+    C_expression_ptr parental_write_call(function_argument_types_ptr argument_types, C_expression_ptr parent_Cexp,
+            std::vector<C_expression_ptr>& argument_Cexpressions, Csource_out_ptr output, bool call_virtual=false,
+                                    cast_enum cast_behavior=cast_enum::implicit_casts);
 
     /// DEFINITION ///
     bool can_be_defined() override {return false;}
@@ -739,6 +1099,9 @@ public:
     /// helper functions
     ResolvedMethod_ptr get_indestinguishable_overload(func_param_ptr parameters);
     bool overload_was_inhereted(ResolvedMethod_ptr ovrld);
+
+    // if own_exp is true, then C_expression_ptr will take charge of cleaning parent_exp
+    C_expression_ptr get_C_exp(C_expression_ptr parent_exp, bool _virtual_call_allowed, bool own_exp=false); // note, return does NOT own parent_exp
 };
 
 
@@ -777,22 +1140,25 @@ public:
     DefClassType(csu::utf8_string _name, csu::utf8_string _c_name, bool _is_ordered, sym_table_ptr _class_symbol_table,
                  csu::location_span _loc);
 
-    bool is_equivalent(varType* RHS) override;
-    varType_ptr copy(csu::utf8_string _definition_name="" ) override;
+    bool is_equivalent(varType_ptr RHS) override;
 
 
 
     /// DEFINITION ///
     bool can_be_defined() override { return true; }
-    void C_definition_name(csu::utf8_string& var_name, std::ostream& output) override;
-    void initialize(csu::utf8_string& var_exp, std::ostream& output) override;
+    void C_definition_name(csu::utf8_string& var_name, Csource_out_ptr output) override;
+    void initialize(csu::utf8_string& var_exp, Csource_out_ptr output) override;
+
+
+    void inform_moved(csu::utf8_string& var_name, Csource_out_ptr output, bool call_virtual=false) override;
+    varType_ptr get_auto_type() override;
 
 
     /// REFERENCING ///
     // by default, will allow getting own pointer
-    bool can_get_pointer(varType* output_type) override; // in general, should return true for equivlent type, at least
+    bool can_get_pointer(varType_ptr output_type) override;// in general, should return true for equivlent type, at least
     // return C expression should be pointer to output_type. exp needs to be referancable c-expression to this type
-    csu::utf8_string get_pointer(varType* output_type, csu::utf8_string& exp, std::ostream& output) override;
+    csu::utf8_string get_pointer(varType_ptr output_type, csu::utf8_string& exp, Csource_out_ptr output) override;
 
 
     /// CLASS THINGS ///
@@ -806,44 +1172,267 @@ public:
 // in case of known method, just returns expression to self. Hopefully such expression is sent to method type BEFORE writing C.
 // self is cast to the type of the class the defines the method (even if it isn't the one with the vtable entry).
 
-    varType_ptr member_has_getter(csu::utf8_string& member_name) override;
-    exp_writer_ptr write_member_getter(csu::utf8_string& expression, csu::utf8_string& member_name,
-                std::ostream& output, bool call_virtual=false) override;
-
     varType_ptr member_has_getref(csu::utf8_string& member_name) override;
-    exp_writer_ptr write_member_getref(csu::utf8_string& expression, csu::utf8_string& member_name,
-        std::ostream& output, bool call_virtual=false) override;
+    C_expression_ptr write_member_getref(C_expression_ptr LHS_exp, csu::utf8_string& member_name,
+            Csource_out_ptr output, bool call_virtual=false) override;
 
-    varType_ptr set_member(csu::utf8_string& member_name, varType* RHS_type=nullptr) override;
+    varType_ptr member_has_getter(csu::utf8_string& member_name) override;
+    C_expression_ptr write_member_getter(C_expression_ptr LHS_exp, csu::utf8_string& member_name,
+            Csource_out_ptr output, bool call_virtual=false) override;
+
+
+    varType_ptr set_member(csu::utf8_string& member_name, varType_ptr RHS_type=nullptr) override;
     // virtual bit doesn't really work, as we don't have setters yet,
-    void write_member_setter(expression_AST_node* exp_AST_node, csu::utf8_string& LHS_expression, csu::utf8_string& member_name,
-             varType* RHS_type, csu::utf8_string& RHS_expression, std::ostream& output, bool call_virtual=false) override;
+    void write_member_setter(C_expression_ptr LHS_expression, csu::utf8_string& member_name,
+             C_expression_ptr RHS_expression, Csource_out_ptr output, bool call_virtual=false) override;
+
+
 
     /// CONSTRUCTORS ///
-    void write_default_constructor(csu::utf8_string& var_name, std::ostream& output) override;
+    void write_default_constructor(csu::utf8_string& var_name, Csource_out_ptr output) override;
 
-    bool has_explicit_constructor(call_argument_list* argument_node_ptr, csu::utf8_string& error_msg) override;
-    void write_explicit_constructor(call_argument_list* argument_node, csu::utf8_string& LHS_Cexp, std::vector<csu::utf8_string>& argument_Cexpressions, std::ostream& output) override;
+    bool has_explicit_constructor(function_argument_types_ptr argument_types, csu::utf8_string& error_msg) override;
+    void write_explicit_constructor(function_argument_types_ptr argument_types, C_expression_ptr LHS_Cexp,
+                        std::vector<C_expression_ptr>& argument_Cexpressions, Csource_out_ptr output) override;
 
-    bool has_implicit_copy_constructor(varType* RHS_type) override;
-    void write_implicit_copy_constructor(varType* RHS_type, expression_AST_node* RHS_AST_node, csu::utf8_string& LHS, csu::utf8_string& RHS_exp, std::ostream& output) override;
+    bool has_explicit_copy_constructor(varType_ptr RHS_type, csu::utf8_string& error_msg) override;
+    void write_explicit_copy_constructor(C_expression_ptr LHS_exp,
+                        C_expression_ptr RHS_exp, Csource_out_ptr output) override;
+
+    bool has_implicit_copy_constructor(varType_ptr RHS_type, cast_enum cast_behavior=cast_enum::implicit_casts) override;
+    void write_implicit_copy_constructor( C_expression_ptr LHS, C_expression_ptr RHS_exp,
+                                            Csource_out_ptr output, cast_enum cast_behavior=cast_enum::implicit_casts) override;
 
 
     /// DESTRUCTORS ///
-    void write_destructor(csu::utf8_string& var_name, std::ostream& output, bool call_virtual=false) override;
+    void write_destructor(csu::utf8_string& var_name, Csource_out_ptr output, bool call_virtual=false) override;
 
 
-    /// ASSIGNMENT ///  just replicates copy constructor (implicit copy constructror now, should be explicit)
-    virtual bool get_has_assignment(varType* RHS_type);
-    virtual void write_assignment(varType* RHS_type, expression_AST_node* RHS_AST_node,
-                                  csu::utf8_string& LHS, csu::utf8_string& RHS_exp, std::ostream& output);
-    //virtual varType_ptr get_auto_type();
+    /// ASSIGNMENT ///
+    bool get_has_assignment(varType_ptr RHS_type) override;
+    void write_assignment(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                            Csource_out_ptr output, bool call_virtual=false) override;
+
+    bool get_has_assignTo(varType_ptr LHS_type) override;
+    void write_assignTo(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                            Csource_out_ptr output, bool call_virtual=false) override;
+
 
 
     /// CASTING ///
-    bool can_implicit_castTo(varType* LHS_type) override;
-    void write_implicit_castTo(varType* LHS_type, expression_AST_node* RHS_AST_node, csu::utf8_string& LHS, csu::utf8_string& RHS_exp,
-                std::ostream& output, bool call_virtual=false) override;
+    bool can_implicit_castTo(varType_ptr LHS_type) override;
+    void write_implicit_castTo( C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                Csource_out_ptr output, bool call_virtual=false) override;
+
+    bool can_explicit_castTo(varType_ptr LHS_type) override;
+    void write_explicit_castTo(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                Csource_out_ptr output, bool call_virtual=false) override;
+
+
+
+    /// CALLING ///
+    varType_ptr is_callable(function_argument_types_ptr argument_types, csu::utf8_string& error_msg,
+                                    cast_enum cast_behavior=cast_enum::implicit_casts) override;
+
+    C_expression_ptr write_call(function_argument_types_ptr argument_types, C_expression_ptr LHS_Cexp,
+            std::vector<C_expression_ptr>& argument_Cexpressions, Csource_out_ptr output, bool call_virtual=false,
+                                    cast_enum cast_behavior=cast_enum::implicit_casts) override;
+
+
+
+    /// BINARY OPERATORS ///
+    varType_ptr get_has_binOperator(varType_ptr type, const char* op_func_name);
+    C_expression_ptr write_binOperator(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                          Csource_out_ptr output, const char* op_func_name, bool call_virtual, bool is_LHS);
+
+      // power
+    varType_ptr get_has_LHSpower(varType_ptr RHS_type) override
+        { return get_has_binOperator(RHS_type, "__lPow__"); }
+    C_expression_ptr write_LHSpower(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false) override
+        { return write_binOperator(LHS_exp, RHS_exp, output, "__lPow__", call_virtual, true); }
+
+    varType_ptr get_has_RHSpower(varType_ptr LHS_type) override
+        { return get_has_binOperator(LHS_type, "__rPow__"); }
+    C_expression_ptr write_RHSpower(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false) override
+        { return write_binOperator(LHS_exp, RHS_exp, output, "__rPow__", call_virtual, false); }
+
+
+      // multiplication
+    varType_ptr get_has_LHSmultiplication(varType_ptr RHS_type) override
+        { return get_has_binOperator(RHS_type, "__lMul__"); }
+    C_expression_ptr write_LHSmultiplication(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false) override
+        { return write_binOperator(LHS_exp, RHS_exp, output, "__lMul__", call_virtual, true); }
+
+    varType_ptr get_has_RHSmultiplication(varType_ptr LHS_type) override
+        { return get_has_binOperator(LHS_type, "__rMul__"); }
+    C_expression_ptr write_RHSmultiplication(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false) override
+        { return write_binOperator(LHS_exp, RHS_exp, output, "__rMul__", call_virtual, false); }
+
+
+      // division
+    varType_ptr get_has_LHSdivision(varType_ptr RHS_type) override
+        { return get_has_binOperator(RHS_type, "__lDiv__"); }
+    C_expression_ptr write_LHSdivision(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false) override
+        { return write_binOperator(LHS_exp, RHS_exp, output, "__lDiv__", call_virtual, true); }
+
+    varType_ptr get_has_RHSdivision(varType_ptr LHS_type) override
+        { return get_has_binOperator(LHS_type, "__rDiv__"); }
+    C_expression_ptr write_RHSdivision(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false) override
+        { return write_binOperator(LHS_exp, RHS_exp, output, "__rDiv__", call_virtual, false); }
+
+
+      // modulus
+    varType_ptr get_has_LHSmodulus(varType_ptr RHS_type) override
+        { return get_has_binOperator(RHS_type, "__lMod__"); }
+    C_expression_ptr write_LHSmodulus(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false) override
+        { return write_binOperator(LHS_exp, RHS_exp, output, "__lMod__", call_virtual, true); }
+
+    varType_ptr get_has_RHSmodulus(varType_ptr LHS_type) override
+        { return get_has_binOperator(LHS_type, "__rMod__"); }
+    C_expression_ptr write_RHSmodulus(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false) override
+        { return write_binOperator(LHS_exp, RHS_exp, output, "__rMod__", call_virtual, false); }
+
+
+      // addition
+    varType_ptr get_has_LHSaddition(varType_ptr RHS_type) override
+        { return get_has_binOperator(RHS_type, "__lAdd__"); }
+    C_expression_ptr write_LHSaddition(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false) override
+        { return write_binOperator(LHS_exp, RHS_exp, output, "__lAdd__", call_virtual, true); }
+
+    varType_ptr get_has_RHSaddition(varType_ptr LHS_type) override
+        { return get_has_binOperator(LHS_type, "__rAdd__"); }
+    C_expression_ptr write_RHSaddition(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false) override
+        { return write_binOperator(LHS_exp, RHS_exp, output, "__rAdd__", call_virtual, false); }
+
+
+      // subtraction
+    varType_ptr get_has_LHSsubtraction(varType_ptr RHS_type) override
+        { return get_has_binOperator(RHS_type, "__lSub__"); }
+    C_expression_ptr write_LHSsubtraction(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false) override
+        { return write_binOperator(LHS_exp, RHS_exp, output, "__lSub__", call_virtual, true); }
+
+    varType_ptr get_has_RHSsubtraction(varType_ptr LHS_type) override
+        { return get_has_binOperator(LHS_type, "__rSub__"); }
+
+    C_expression_ptr write_RHSsubtraction(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                              Csource_out_ptr output, bool call_virtual=false) override
+        { return write_binOperator(LHS_exp, RHS_exp, output, "__rSub__", call_virtual, false); }
+
+    /// COMPARISON OPERATORS ///
+    varType_ptr get_has_cmp(varType_ptr type);
+    C_expression_ptr write_compOperator(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp,
+                          Csource_out_ptr output, char operation, bool call_virtual, bool is_LHS); // operations: < , >, !, =, L, G respectively: lessthan, greaterthan, not equal, equal to,  <=, and >=
+
+        // lessThan
+    varType_ptr get_has_LHSlessThan(varType_ptr RHS_type) override
+        { return get_has_cmp(RHS_type); }
+    C_expression_ptr write_LHSlessThan(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp, Csource_out_ptr output, bool call_virtual=false) override
+        {
+            return write_compOperator(LHS_exp, RHS_exp, output, '<', call_virtual, true);
+        }
+
+    varType_ptr get_has_RHSlessThan(varType_ptr LHS_type) override
+        { return get_has_cmp(LHS_type); }
+    C_expression_ptr write_RHSlessThan(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp, Csource_out_ptr output, bool call_virtual=false) override
+        {
+            return write_compOperator(LHS_exp, RHS_exp, output, '<', call_virtual, false);
+        }
+
+
+            // greatThan
+    virtual varType_ptr get_has_LHSgreatThan(varType_ptr RHS_type) override
+        { return get_has_cmp(RHS_type); }
+    virtual C_expression_ptr write_LHSgreatThan(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp, Csource_out_ptr output, bool call_virtual=false) override
+        {
+            return write_compOperator(LHS_exp, RHS_exp, output, '>', call_virtual, true);
+        }
+
+    virtual varType_ptr get_has_RHSgreatThan(varType_ptr LHS_type) override
+        { return get_has_cmp(LHS_type); }
+    virtual C_expression_ptr write_RHSgreatThan(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp, Csource_out_ptr output, bool call_virtual=false) override
+        {
+            return write_compOperator(LHS_exp, RHS_exp, output, '>', call_virtual, false);
+        }
+
+            // equalTo
+    virtual varType_ptr get_has_LHSequalTo(varType_ptr RHS_type) override
+        { return get_has_cmp(RHS_type); }
+    virtual C_expression_ptr write_LHSequalTo(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp, Csource_out_ptr output, bool call_virtual=false) override
+        {
+            return write_compOperator(LHS_exp, RHS_exp, output, '=', call_virtual, true);
+        }
+
+    virtual varType_ptr get_has_RHSequalTo(varType_ptr LHS_type) override
+        { return get_has_cmp(LHS_type); }
+    virtual C_expression_ptr write_RHSequalTo(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp, Csource_out_ptr output, bool call_virtual=false) override
+        {
+            return write_compOperator(LHS_exp, RHS_exp, output, '=', call_virtual, false);
+        }
+
+            // notEqual
+    virtual varType_ptr get_has_LHSnotEqual(varType_ptr RHS_type) override
+        { return get_has_cmp(RHS_type); }
+    virtual C_expression_ptr write_LHSnotEqual(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp, Csource_out_ptr output, bool call_virtual=false) override
+        {
+            return write_compOperator(LHS_exp, RHS_exp, output, '!', call_virtual, true);
+        }
+
+    virtual varType_ptr get_has_RHSnotEqual(varType_ptr LHS_type) override
+        { return get_has_cmp(LHS_type); }
+    virtual C_expression_ptr write_RHSnotEqual(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp, Csource_out_ptr output, bool call_virtual=false) override
+        {
+            return write_compOperator(LHS_exp, RHS_exp, output, '!', call_virtual, false);
+        }
+
+            // lessEqual
+    virtual varType_ptr get_has_LHSlessEqual(varType_ptr RHS_type) override
+        { return get_has_cmp(RHS_type); }
+    virtual C_expression_ptr write_LHSlessEqual(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp, Csource_out_ptr output, bool call_virtual=false) override
+        {
+            return write_compOperator(LHS_exp, RHS_exp, output, 'L', call_virtual, true);
+        }
+
+    virtual varType_ptr get_has_RHSlessEqual(varType_ptr LHS_type) override
+        { return get_has_cmp(LHS_type); }
+    virtual C_expression_ptr write_RHSlessEqual(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp, Csource_out_ptr output, bool call_virtual=false) override
+        {
+            return write_compOperator(LHS_exp, RHS_exp, output, 'L', call_virtual, false);
+        }
+
+            // greatEqual
+    virtual varType_ptr get_has_LHSgreatEqual(varType_ptr RHS_type) override
+        { return get_has_cmp(RHS_type); }
+    virtual C_expression_ptr write_LHSgreatEqual(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp, Csource_out_ptr output, bool call_virtual=false) override
+        {
+            return write_compOperator(LHS_exp, RHS_exp, output, 'G', call_virtual, true);
+        }
+
+    virtual varType_ptr get_has_RHSgreatEqual(varType_ptr LHS_type) override
+        { return get_has_cmp(LHS_type); }
+    virtual C_expression_ptr write_RHSgreatEqual(C_expression_ptr LHS_exp, C_expression_ptr RHS_exp, Csource_out_ptr output, bool call_virtual=false) override
+        {
+            return write_compOperator(LHS_exp, RHS_exp, output, 'G', call_virtual, false);
+        }
+
+
+
+
+/// C-interface
+    varType_ptr can_toC() override;
+    C_expression_ptr toC(C_expression_ptr exp, Csource_out_ptr output, bool call_virtual=false) override;
+
+
 
 
 /// special interface things needed for just classes
@@ -908,8 +1497,37 @@ public:
 
 
     // given a parent index, and referencable C expression with this type, return referencable c-exp with parent type
-    csu::utf8_string write_parent_access(int parent_index, csu::utf8_string& exp, std::ostream& output);
+    C_expression_ptr write_parent_access(int parent_index, C_expression_ptr exp, Csource_out_ptr output);   // note, return isn't cleaned up in DefClassType::get_pointer !!
 };
+
+
+class MetaType : public varType
+// a variable with the name of a type, has this type
+// eventually this should be a global object. This is where static functions and variables should be defined
+{
+public:
+    varType_ptr type;
+
+    MetaType(varType_ptr _type);
+
+    bool is_equivalent(varType_ptr RHS) override; // if is metatype and "type" is the same
+
+    // note that type cannot be defined
+    // .... or do much at all at this point .....
+
+    // BUT!! it IS callable!!
+    // this explicitly constructs new variable of type and "returns" it
+    varType_ptr is_callable(function_argument_types_ptr argument_types, csu::utf8_string& error_msg,
+                                    cast_enum cast_behavior=cast_enum::implicit_casts) override;
+
+    // for now, LHS_Cexp is not used
+    C_expression_ptr write_call(function_argument_types_ptr argument_types, C_expression_ptr LHS_Cexp,
+            std::vector<C_expression_ptr>& argument_Cexpressions, Csource_out_ptr output, bool call_virtual=false,
+                                    cast_enum cast_behavior=cast_enum::implicit_casts) override;
+
+};
+
+
 
 
 
@@ -946,8 +1564,12 @@ public:
     // if is_exclusive return true, then we are good. If false, then bad. If is_exclusive is false, then it is set to true
     // returns nullptr if and only if is_exclusive returns false
     virtual varName_ptr new_variable(varType_ptr var_type, csu::utf8_string& definition_name, csu::location_span& _loc, bool& is_exclusive, bool is_ordered=true);
+
     virtual void add_variable(varName_ptr new_var, bool& is_exclusive);
     virtual void add_type(varType_ptr new_type, bool& is_exclusive);
+
+    virtual void add_variable(varName_ptr new_var, bool& is_exclusive, csu::utf8_string& alias);
+    virtual void add_type(varType_ptr new_type, bool& is_exclusive, csu::utf8_string& alias);
 
     // if variable does not exist
     //     check_order is not changed, returns null

@@ -82,6 +82,8 @@ class location_span
     location_span(const location_span& RHS);
     location_span();
 
+    bool is_comparible(const location_span& LHS);
+
     bool strictly_GT(const location_span& LHS);
     bool strictly_LT(const location_span& LHS);
 };
@@ -277,6 +279,14 @@ public:
     {
         input_buffer = std::shared_ptr<ring_buffer>(new ring_buffer(_input));
         loc = location();//reset location
+        loc.file_name = "input_stream";
+    }
+
+    void set_input(std::istream& _input, utf8_string &stream_name)
+    {
+        input_buffer = std::shared_ptr<ring_buffer>(new ring_buffer(_input));
+        loc = location();//reset location
+        loc.file_name = stream_name;
     }
 
     void unput(utf8_string& data)
