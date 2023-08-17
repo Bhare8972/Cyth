@@ -50,3 +50,15 @@ void AST_visitorTree::initiate_children(int number)
     }
 }
 
+void apply_visitor_upwards(AST_node* node, AST_visitor_base* visitor)
+{
+    while( node )
+    {
+        node->apply_visitor( visitor );
+        node = node->parent_node;
+    }
+}
+
+
+
+

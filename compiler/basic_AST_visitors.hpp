@@ -16,6 +16,12 @@ limitations under the License.
 This file defines basic visitors that act on the AST after it is built by the parser
 */
 
+//AST node verification is too complicated. Way if SHOULD be (but isn't):  node->verification_state should be 0 for fail or -1 for not-fail. There is no "verified state".
+//    Final verify_symbol_table should fail if any verification_state==0.  Majority of nodes are left this simple.
+//    However, verification_state is integer to allow for different values for a few unique situations. However, if verify_symbol_table::ASTnode_up encounteres a unique value, it will throw an exception.
+
+
+
 #ifndef BASIC_AST_VISITORS_191110152455
 #define BASIC_AST_VISITORS_191110152455
 
@@ -27,6 +33,7 @@ class set_symbol_table : public AST_visitorTree
 {
 private:
     sym_table_base* symbol_table;
+    AST_node* current_node; // set in ASTnode_down
 
 public:
 
@@ -43,6 +50,8 @@ public:
     void funcDef_down(function_AST_node* funcDef) override;
     void ClassDef_down( class_AST_node* class_node) override;
     void methodDef_down(method_AST_node* methodDef) override;
+
+    void flowControl_down(flowControl_AST_node* controlNode) override;
 };
 
 // defines all the names.
@@ -67,7 +76,10 @@ public:
 
     // difficult to combine these three, since ClassVarDef must be on down
     void definitionStmt_up(definition_statement_AST_node* defStmt, AST_visitor_base* varTypeRepr_child) override;
-    void definitionNconstruction_up(definitionNconstruction_statement_AST_node* defStmt, AST_visitor_base* varTypeRepr_child, AST_visitor_base* argList_child) override;
+    void definitionNconstruction_up(definitionNconstruction_statement_AST_node* defStmt, AST_visitor_base* varTypeRepr_child,
+                                     AST_visitor_base* argList_child) override;
+    void definitionNassignment_up(definitionNassignment_statement_AST_node* defStmt, AST_visitor_base* varTypeRepr_child,
+                                     AST_visitor_base* exp_child) override;
     void autoDefStmt_up(auto_definition_statement_AST_node* autoStmt, AST_visitor_base* expression_child) override;
 
     void funcDef_down(function_AST_node* funcDef) override; // need to do this BEFORE block, to define arguments
@@ -101,6 +113,7 @@ public:
 
 
 // we need to register all the overloads of different functions and methods
+// sets all types to reference types
 class register_overloads : public AST_visitorTree
 {
 public:
@@ -154,6 +167,7 @@ class build_types : public AST_visitorTree
 public:
     bool changes_were_made;
     bool debug; // default false
+    int typed_VarDef_signal; // used to signal behavior of typed_VarDef_up. Default is 0, which means typed_VarDef_up is allowed to verify node. 1 means typed_VarDef_up is not allowed to verify
 
     build_types();
     build_types(bool _debug);
@@ -171,11 +185,24 @@ public:
     void defaultParams_up(function_parameter_list::defaulted_params* defParams,
                                   std::list<AST_visitor_base*>& param_name_visitors, std::list<AST_visitor_base*>& default_exp_visitors) override;
 
-    void typed_VarDef_up(Typed_VarDefinition* var_def, AST_visitor_base* var_type) override;
+
+    void activeCond_up(activeCond_AST_node* condNode, AST_visitor_base* ifExp_child, AST_visitor_base* block_child, AST_visitor_base* childConditional) override;
+
+    void while_up(whileLoop_AST_node* whileLoopNode, AST_visitor_base* whileExp_child, AST_visitor_base* Block_child) override;
+    void for_up(forLoop_AST_node* forLoopNode, AST_visitor_base* initialStmt_child, AST_visitor_base* updateStmt_child, AST_visitor_base* whileExp_child, AST_visitor_base* Block_child) override;
+
+
     void definitionNconstruction_up(definitionNconstruction_statement_AST_node* defStmt, AST_visitor_base* varTypeRepr_child, AST_visitor_base* argList_child) override;
-    void assignmentStmt_up(assignment_statement_AST_node* assignStmt, AST_visitor_base* LHS_reference_child, AST_visitor_base* expression_child) override;
+    void definitionNassignment_up(definitionNassignment_statement_AST_node* defStmt, AST_visitor_base* varTypeRepr_child, AST_visitor_base* exp_child) override;
+    void typed_VarDef_up(Typed_VarDefinition* var_def, AST_visitor_base* var_type) override;
+
     void autoDefStmt_up(auto_definition_statement_AST_node* autoStmt, AST_visitor_base* expression_child) override;
+
+    void assignmentStmt_up(assignment_statement_AST_node* assignStmt, AST_visitor_base* LHS_reference_child, AST_visitor_base* expression_child) override;
     void returnStatement_up(return_statement_AST_node* returnStmt, AST_visitor_base* expression_child) override;
+
+    // this one is a bit complex. But only needs to be run once. Should be in different visitor?
+    void loopCntrlStatement_up(loopCntrl_statement_AST_node* cntrlStmt) override;
 
     void LHS_varRef_up(LHS_varReference* varref) override;
     void LHS_accessor_up(LHS_accessor_AST_node* LHSaccess, AST_visitor_base* LHSref_visitor) override;
@@ -193,20 +220,25 @@ public:
 
 
 // verify symbol table
+
+// this is a total mess at this point and needs to be re-thought through. Set so it does the same thing for majority of nodes.
+
 // by the time we get here the AST nodes are in four classes
-// 1) nodes that have already been verified
+// 1) nodes that have already been verified ; this is assumed to not be the case. (I think???)
 // 2) nodes that need to be verified
         // 2a need to override before if something special is needed
         // 2b need to call fail_if_not_verified if fail on -1 state.
             // if called in DOWN, then will not acclimate from children.
 // 3) nodes that are verified via acclimation of children
-        // this is default behavior. Can turn off by overrdign DOWN callback and set do_acclimation to false.
+        // this is default behavior (in ASTnode_up). Default is that children as still checked even if node is verified
+        // Can turn off by overrdign DOWN callback and set do_acclimation to false.
         // will throw exception if child is not verified.
 class verify_symbol_table : public AST_visitorTree
 {
 public:
-    bool is_verified; // true if this node doesn't need to check children for verification.
-    bool do_acclimation; // default is true. Set to False on way down if not.
+    bool do_children; // default is true
+    bool is_verified; // final result
+    bool do_acclimation; // default is true. Set to False on way down if not. Is done in ASTnode_up as final action.
     int verification_state; // set in ASTnode_down or ASTnode_up accordingly
 
     verify_symbol_table();
@@ -220,11 +252,12 @@ public:
             verification_state = ASTnode->verification_state;
         }
     }
+
     // Note this is called immediatly after ASTnode_down
     bool apply_to_children() override
-        { return not is_verified; } // only do children if not verified
+        { return do_children; } // only do children if not verified
 
-    // acclimate children unless (do_acclimation has been set to false) or is_verified.
+    // acclimate children unless (do_acclimation has been set to false) or ASTnode->verification_state == 0
     void ASTnode_up(AST_node* ASTnode) override;
 
 
@@ -246,6 +279,11 @@ public:
 
     void callArguments_down(call_argument_list* callArgs) override
         { fail_if_not_verified(callArgs, "call arguments"); }
+
+
+
+    //void flowControl_down(flowControl_AST_node* controlNode) override
+    //    { fail_if_not_verified(controlNode, "flow control"); }
 
 
 

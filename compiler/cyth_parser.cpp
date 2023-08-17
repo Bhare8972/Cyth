@@ -22,6 +22,7 @@ This file defines the Cyth syntax and produces the lexer
 using namespace std;
 using namespace csu;
 
+
 //// functions used in parsing ////
 
 /// module ///
@@ -657,6 +658,20 @@ statement_AST_ptr make_statement_definitionNconstruction_AST( parser_function_cl
     return static_pointer_cast<statement_AST_node>( new_statement );
 }
 
+//TYPENAME_nonterm, IDENTIFIER_term, EQUALS_symbol, EXPRESSION_nonterm
+statement_AST_ptr make_statement_definitionNassignment_AST( parser_function_class::data_T& data )
+{
+    auto var_type = data[0].data<varType_ASTrepr_ptr>();
+    auto loc = data[0].loc();
+    auto var_name = data[1].data<utf8_string>();
+    auto expression = data[3].data<expression_AST_ptr>();
+    loc = loc + data[3].loc();
+
+    auto new_statement =  make_shared<definitionNassignment_statement_AST_node>( var_type, var_name, expression, loc );
+    return static_pointer_cast<statement_AST_node>( new_statement );
+}
+
+
 //LHS_REFERENCE_nonterm, EQUALS_symbol, EXPRESSION_nonterm
 statement_AST_ptr make_statement_assignment_AST ( parser_function_class::data_T& data )
 {
@@ -691,9 +706,146 @@ statement_AST_ptr make_statement_return_AST ( parser_function_class::data_T& dat
     return new_statement;
 }
 
+// BREAK_keyword
+statement_AST_ptr make_simpleBreak_AST ( parser_function_class::data_T& data )
+{
+    auto loc = data[0].loc();
+
+    auto new_break =  make_shared<loopCntrl_statement_AST_node>( loopCntrl_statement_AST_node::break_t , 0 , loc );
+    return new_break;
+}
+
+// CONTINUE_keyword
+statement_AST_ptr make_simpleContinue_AST ( parser_function_class::data_T& data )
+{
+    auto loc = data[0].loc();
+
+    auto new_continue =  make_shared<loopCntrl_statement_AST_node>( loopCntrl_statement_AST_node::cont_t , 0 , loc );
+    return new_continue;
+}
+
+// BREAK_keyword, INT_term
+statement_AST_ptr make_fullBreak_AST ( parser_function_class::data_T& data )
+{
+    auto loc = data[0].loc() + data[1].loc();
+    auto int_string = data[1].data<utf8_string>();
+    int depth = std::stoi( int_string.to_cpp_string() );
+
+    auto new_break =  make_shared<loopCntrl_statement_AST_node>( loopCntrl_statement_AST_node::break_t , depth , loc );
+    return new_break;
+}
+
+// CONTINUE_keyword, INT_term
+statement_AST_ptr make_fullContinue_AST ( parser_function_class::data_T& data )
+{
+    auto loc = data[0].loc() + data[1].loc();
+    auto int_string = data[1].data<utf8_string>();
+    int depth = std::stoi( int_string.to_cpp_string()  );
+
+    auto new_break =  make_shared<loopCntrl_statement_AST_node>( loopCntrl_statement_AST_node::cont_t , depth , loc );
+    return new_break;
+}
 
 
 
+
+/// CONDITIONALS ////
+// IF_nonterm
+//IF_keyword, EXPRESSION_nonterm , BLOCK_nonterm
+conditional_AST_ptr make_IF_AST( parser_function_class::data_T& data )
+{
+    auto loc = data[0].loc();
+    auto expression = data[1].data<expression_AST_ptr>();
+    auto block = data[2].data<block_AST_ptr>();
+    loc = loc + data[2].loc();
+
+    auto new_IF = make_shared<if_AST_node>( expression, block, nullptr, loc );
+    return new_IF;
+}
+
+//IF_keyword, EXPRESSION_nonterm, BLOCK_nonterm, ELIF_nonterm
+//IF_keyword, EXPRESSION_nonterm, BLOCK_nonterm, ELSE_nonterm
+conditional_AST_ptr make_IFchild_AST( parser_function_class::data_T& data )
+{
+    auto loc = data[0].loc();
+    auto expression = data[1].data<expression_AST_ptr>();
+    auto block = data[2].data<block_AST_ptr>();
+    auto child_cond = data[3].data<conditional_AST_ptr>();
+    loc = loc + data[3].loc();
+
+    auto new_IF = make_shared<if_AST_node>( expression, block, child_cond, loc );
+    return new_IF;
+}
+
+
+//ELIF
+//ELIF_keyword, EXPRESSION_nonterm , BLOCK_nonterm
+conditional_AST_ptr make_ELIF_AST( parser_function_class::data_T& data )
+{
+    auto loc = data[0].loc();
+    auto expression = data[1].data<expression_AST_ptr>();
+    auto block = data[2].data<block_AST_ptr>();
+    loc = loc + data[2].loc();
+
+    auto new_ELIF = make_shared<elif_AST_node>( expression, block, nullptr, loc );
+    return new_ELIF;
+}
+
+//ELIF_keyword, EXPRESSION_nonterm , BLOCK_nonterm, ELIF_nonterm
+//ELIF_keyword, EXPRESSION_nonterm , BLOCK_nonterm, ELSE_nonterm
+conditional_AST_ptr make_ELIFchild_AST( parser_function_class::data_T& data )
+{
+    auto loc = data[0].loc();
+    auto expression = data[1].data<expression_AST_ptr>();
+    auto block = data[2].data<block_AST_ptr>();
+    auto child_cond = data[3].data<conditional_AST_ptr>();
+    loc = loc + data[3].loc();
+
+    auto new_ELIF = make_shared<elif_AST_node>( expression, block, child_cond, loc );
+    return new_ELIF;
+}
+
+//ELSE
+//ELSE_keyword , BLOCK_nonterm
+conditional_AST_ptr make_ELSE_AST( parser_function_class::data_T& data )
+{
+    auto loc = data[0].loc();
+    auto block = data[1].data<block_AST_ptr>();
+    loc = loc + data[1].loc();
+
+    auto new_ELSE = make_shared<else_AST_node>( block, loc );
+    return new_ELSE;
+}
+
+
+/// LOOPS ///
+// WHILE
+//WHILE_keyword, EXPRESSION_nonterm , BLOCK_nonterm
+loop_AST_ptr make_WHILE_AST ( parser_function_class::data_T& data )
+{
+    auto loc = data[0].loc();
+    auto expression = data[1].data<expression_AST_ptr>();
+    auto block = data[2].data<block_AST_ptr>();
+    loc = loc + data[2].loc();
+
+    auto new_WHILE = make_shared<whileLoop_AST_node>( block, expression, loc );
+    return new_WHILE;
+}
+
+// FOR
+//FOR_nonterm, STATEMENT_nonterm , IN_keyword , STATEMENT_nonterm , WHILE_keyword , EXPRESSION_nonterm , BLOCK_nonterm
+loop_AST_ptr make_FOR_AST ( parser_function_class::data_T& data )
+{
+    auto loc = data[0].loc();
+    auto init_stmt = data[1].data<statement_AST_ptr>();
+    auto update_stmt = data[3].data<statement_AST_ptr>();
+    auto expression = data[5].data<expression_AST_ptr>();
+    auto block = data[6].data<block_AST_ptr>();
+    loc = loc + data[6].loc();
+
+    auto new_FOR = make_shared<forLoop_AST_node>( block, expression, init_stmt, update_stmt, loc );
+    return new_FOR;
+}
 
 
 /// EXPRESSIONS ///
@@ -703,16 +855,6 @@ expression_AST_ptr make_intLiteral_AST ( parser_function_class::data_T& data )
 {
     auto int_string = data[0].data<utf8_string>();
     auto new_expression =  make_shared<intLiteral_expression_AST_node>( int_string, data[0].loc() );
-    return static_pointer_cast<expression_AST_node>( new_expression );
-}
-
-//EXPRESSION_nonterm PLUS EXPRESSION_nonterm
-expression_AST_ptr make_expression_addition_AST ( parser_function_class::data_T& data )
-{
-    auto left_operand = data[0].data<expression_AST_ptr>();
-    auto right_operand = data[2].data<expression_AST_ptr>();
-
-    auto new_expression = make_shared<binOperator_expression_AST_node>( left_operand, binOperator_expression_AST_node::addition_t, right_operand);
     return static_pointer_cast<expression_AST_node>( new_expression );
 }
 
@@ -759,6 +901,127 @@ expression_AST_ptr make_accessor_expression_AST( parser_function_class::data_T& 
 }
 
 
+/// BINARY EXPRESSIONS ///
+//EXPRESSION_nonterm POW EXPRESSION_nonterm
+expression_AST_ptr make_expression_power_AST ( parser_function_class::data_T& data )
+{
+    auto left_operand = data[0].data<expression_AST_ptr>();
+    auto right_operand = data[2].data<expression_AST_ptr>();
+
+    auto new_expression = make_shared<binOperator_expression_AST_node>( left_operand, binOperator_expression_AST_node::power_t, right_operand);
+    return static_pointer_cast<expression_AST_node>( new_expression );
+}
+
+//EXPRESSION_nonterm MUL EXPRESSION_nonterm
+expression_AST_ptr make_expression_multiplication_AST ( parser_function_class::data_T& data )
+{
+    auto left_operand = data[0].data<expression_AST_ptr>();
+    auto right_operand = data[2].data<expression_AST_ptr>();
+
+    auto new_expression = make_shared<binOperator_expression_AST_node>( left_operand, binOperator_expression_AST_node::multiplication_t, right_operand);
+    return static_pointer_cast<expression_AST_node>( new_expression );
+}
+
+//EXPRESSION_nonterm DIV EXPRESSION_nonterm
+expression_AST_ptr make_expression_division_AST ( parser_function_class::data_T& data )
+{
+    auto left_operand = data[0].data<expression_AST_ptr>();
+    auto right_operand = data[2].data<expression_AST_ptr>();
+
+    auto new_expression = make_shared<binOperator_expression_AST_node>( left_operand, binOperator_expression_AST_node::division_t, right_operand);
+    return static_pointer_cast<expression_AST_node>( new_expression );
+}
+
+//EXPRESSION_nonterm MOD EXPRESSION_nonterm
+expression_AST_ptr make_expression_modulus_AST ( parser_function_class::data_T& data )
+{
+    auto left_operand = data[0].data<expression_AST_ptr>();
+    auto right_operand = data[2].data<expression_AST_ptr>();
+
+    auto new_expression = make_shared<binOperator_expression_AST_node>( left_operand, binOperator_expression_AST_node::modulus_t, right_operand);
+    return static_pointer_cast<expression_AST_node>( new_expression );
+}
+
+//EXPRESSION_nonterm PLUS EXPRESSION_nonterm
+expression_AST_ptr make_expression_addition_AST ( parser_function_class::data_T& data )
+{
+    auto left_operand = data[0].data<expression_AST_ptr>();
+    auto right_operand = data[2].data<expression_AST_ptr>();
+
+    auto new_expression = make_shared<binOperator_expression_AST_node>( left_operand, binOperator_expression_AST_node::addition_t, right_operand);
+    return static_pointer_cast<expression_AST_node>( new_expression );
+}
+
+//EXPRESSION_nonterm SUB EXPRESSION_nonterm
+expression_AST_ptr make_expression_subtraction_AST ( parser_function_class::data_T& data )
+{
+    auto left_operand = data[0].data<expression_AST_ptr>();
+    auto right_operand = data[2].data<expression_AST_ptr>();
+
+    auto new_expression = make_shared<binOperator_expression_AST_node>( left_operand, binOperator_expression_AST_node::subtraction_t, right_operand);
+    return static_pointer_cast<expression_AST_node>( new_expression );
+}
+
+//EXPRESSION_nonterm LES_symbol EXPRESSION_nonterm
+expression_AST_ptr make_expression_LessThan_AST ( parser_function_class::data_T& data )
+{
+    auto left_operand = data[0].data<expression_AST_ptr>();
+    auto right_operand = data[2].data<expression_AST_ptr>();
+
+    auto new_expression = make_shared<binOperator_expression_AST_node>( left_operand, binOperator_expression_AST_node::lessThan_t, right_operand);
+    return static_pointer_cast<expression_AST_node>( new_expression );
+}
+
+//EXPRESSION_nonterm GRE_symbol EXPRESSION_nonterm
+expression_AST_ptr make_expression_GreatThan_AST ( parser_function_class::data_T& data )
+{
+    auto left_operand = data[0].data<expression_AST_ptr>();
+    auto right_operand = data[2].data<expression_AST_ptr>();
+
+    auto new_expression = make_shared<binOperator_expression_AST_node>( left_operand, binOperator_expression_AST_node::greatThan_t, right_operand);
+    return static_pointer_cast<expression_AST_node>( new_expression );
+}
+
+//EXPRESSION_nonterm BEQ_symbol EXPRESSION_nonterm
+expression_AST_ptr make_expression_EqualTo_AST ( parser_function_class::data_T& data )
+{
+    auto left_operand = data[0].data<expression_AST_ptr>();
+    auto right_operand = data[2].data<expression_AST_ptr>();
+
+    auto new_expression = make_shared<binOperator_expression_AST_node>( left_operand, binOperator_expression_AST_node::equalTo_t, right_operand);
+    return static_pointer_cast<expression_AST_node>( new_expression );
+}
+
+//EXPRESSION_nonterm NEQ_symbol EXPRESSION_nonterm
+expression_AST_ptr make_expression_NotEqual_AST ( parser_function_class::data_T& data )
+{
+    auto left_operand = data[0].data<expression_AST_ptr>();
+    auto right_operand = data[2].data<expression_AST_ptr>();
+
+    auto new_expression = make_shared<binOperator_expression_AST_node>( left_operand, binOperator_expression_AST_node::notEqual_t, right_operand);
+    return static_pointer_cast<expression_AST_node>( new_expression );
+}
+
+//EXPRESSION_nonterm LEQ_symbol EXPRESSION_nonterm
+expression_AST_ptr make_expression_LessEqual_AST ( parser_function_class::data_T& data )
+{
+    auto left_operand = data[0].data<expression_AST_ptr>();
+    auto right_operand = data[2].data<expression_AST_ptr>();
+
+    auto new_expression = make_shared<binOperator_expression_AST_node>( left_operand, binOperator_expression_AST_node::lessEqual_t, right_operand);
+    return static_pointer_cast<expression_AST_node>( new_expression );
+}
+
+//EXPRESSION_nonterm GEQ_symbol EXPRESSION_nonterm
+expression_AST_ptr make_expression_GreatEqual_AST ( parser_function_class::data_T& data )
+{
+    auto left_operand = data[0].data<expression_AST_ptr>();
+    auto right_operand = data[2].data<expression_AST_ptr>();
+
+    auto new_expression = make_shared<binOperator_expression_AST_node>( left_operand, binOperator_expression_AST_node::greatEqual_t, right_operand);
+    return static_pointer_cast<expression_AST_node>( new_expression );
+}
+
 
 
 
@@ -781,7 +1044,7 @@ void cython_lexer::set_identifiers(int _STMT_id, int _NEW_BLOCK_id, int _END_BLO
     EOF_id = _EOF_id;
 }
 
-void cython_lexer::expect_block()
+void cython_lexer::expect_block() // note this may be called multiple times on same line
 {
     expecting_block = true;
 }
@@ -922,9 +1185,30 @@ make_cyth_parser::make_cyth_parser(bool do_file_IO) : cyth_parser_generator("./c
     auto RETURN_keyword = cyth_parser_generator.new_terminal("return");
     auto CLASS_keyword = cyth_parser_generator.new_terminal("class");
     auto CONSTRUCT_keyword = cyth_parser_generator.new_terminal("construct");
+    auto IF_keyword = cyth_parser_generator.new_terminal("if");
+    auto ELSE_keyword = cyth_parser_generator.new_terminal("else");
+    auto ELIF_keyword = cyth_parser_generator.new_terminal("elif");
+    auto WHILE_keyword = cyth_parser_generator.new_terminal("while");
+    auto FOR_keyword = cyth_parser_generator.new_terminal("for");
+    auto IN_keyword = cyth_parser_generator.new_terminal("in");
+    auto BREAK_keyword = cyth_parser_generator.new_terminal("break");
+    auto CONTINUE_keyword = cyth_parser_generator.new_terminal("continue");
 
     //symbols
+    auto POW_symbol = cyth_parser_generator.new_terminal("^");
+    auto MUL_symbol = cyth_parser_generator.new_terminal("*");
+    auto DIV_symbol = cyth_parser_generator.new_terminal("/");
+    auto MOD_symbol = cyth_parser_generator.new_terminal("%");
     auto PLUS_symbol = cyth_parser_generator.new_terminal("+");
+    auto SUB_symbol = cyth_parser_generator.new_terminal("-");
+
+    auto LES_symbol = cyth_parser_generator.new_terminal("<");
+    auto GRE_symbol = cyth_parser_generator.new_terminal(">");
+    auto BEQ_symbol = cyth_parser_generator.new_terminal("==");
+    auto NEQ_symbol = cyth_parser_generator.new_terminal("!=");
+    auto LEQ_symbol = cyth_parser_generator.new_terminal("<=");
+    auto GEQ_symbol = cyth_parser_generator.new_terminal(">=");
+
     auto EQUALS_symbol = cyth_parser_generator.new_terminal("=");
     auto LPAREN_symbol = cyth_parser_generator.new_terminal("(");
     auto RPAREN_symbol = cyth_parser_generator.new_terminal(")");
@@ -953,8 +1237,29 @@ make_cyth_parser::make_cyth_parser(bool do_file_IO) : cyth_parser_generator("./c
     CLASS_keyword->add_pattern<utf8_string>("class", LEX_make_expect_block );
     DEF_keyword->add_pattern<utf8_string>("def", LEX_make_expect_block );
     CONSTRUCT_keyword->add_pattern<utf8_string>("construct", LEX_make_expect_block );
+    IF_keyword->add_pattern<utf8_string>("if", LEX_make_expect_block );
+    ELSE_keyword->add_pattern<utf8_string>("else", LEX_make_expect_block );
+    ELIF_keyword->add_pattern<utf8_string>("elif", LEX_make_expect_block );
+    WHILE_keyword->add_pattern<utf8_string>("while", LEX_make_expect_block ); // note that for loops will call LEX_make_expect_block twice. Which should be okay unless something changes.
+    FOR_keyword->add_pattern<utf8_string>("for", LEX_make_expect_block );
+    IN_keyword->add_pattern("in");
+    BREAK_keyword->add_pattern("break");
+    CONTINUE_keyword->add_pattern("continue");
 
+    POW_symbol->add_pattern("^");
+    MUL_symbol->add_pattern("[*]");
+    DIV_symbol->add_pattern("/");
+    MOD_symbol->add_pattern("%");
     PLUS_symbol->add_pattern("[+]");
+    SUB_symbol->add_pattern("-");
+
+    LES_symbol->add_pattern("<");
+    GRE_symbol->add_pattern(">");
+    BEQ_symbol->add_pattern("==");
+    NEQ_symbol->add_pattern("!=");
+    LEQ_symbol->add_pattern("<=");
+    GEQ_symbol->add_pattern(">=");
+
     EQUALS_symbol->add_pattern("=");
     LPAREN_symbol->add_pattern("[(]");
     RPAREN_symbol->add_pattern("[)]");
@@ -966,7 +1271,8 @@ make_cyth_parser::make_cyth_parser(bool do_file_IO) : cyth_parser_generator("./c
     INT_term->add_pattern("[0-9]+");
     IDENTIFIER_term->add_pattern("[# _ a-z A-Z]+[# _ 0-9 a-z A-Z]*");
     //FILENAME_term->add_pattern("[# _ a-z A-Z 0-9 . \\\\ ]+");
-    STRING_term->add_pattern(" < [# _ a-z A-Z 0-9 . \\\\ /]+  > "); // not correct. Fijn for now
+    //STRING_term->add_pattern(" < [# _ a-z A-Z 0-9 . \\\\ /]+  > "); // not correct. Fijn for now
+    STRING_term->add_pattern(" ' [# _ a-z A-Z 0-9 . \\\\ /]+  ' "); // not correct. Fijn for now
 
     COMPILERCOMMAND_term->add_pattern("!!! [^ \\n]*");
 
@@ -1006,6 +1312,15 @@ make_cyth_parser::make_cyth_parser(bool do_file_IO) : cyth_parser_generator("./c
     auto CONSTRUCT_LIST_nonterm = cyth_parser_generator.new_nonterminal("construct_list");
     auto CONSTRUCT_ELEMENT_nonterm = cyth_parser_generator.new_nonterminal("construct_element");
 
+    // conditionals
+    auto IF_nonterm = cyth_parser_generator.new_nonterminal("IF_conditional");
+    auto ELIF_nonterm = cyth_parser_generator.new_nonterminal("ELIF_conditional");
+    auto ELSE_nonterm = cyth_parser_generator.new_nonterminal("ELSE_conditional");
+
+    // loops
+    auto WHILE_nonterm = cyth_parser_generator.new_nonterminal("WHILE_loop");
+    auto FOR_nonterm = cyth_parser_generator.new_nonterminal("FOR_loop");
+
     // types of names
     auto TYPENAME_nonterm = cyth_parser_generator.new_nonterminal("type_name");
     auto LHS_REFERENCE_nonterm = cyth_parser_generator.new_nonterminal("LHS_reference");
@@ -1029,6 +1344,10 @@ make_cyth_parser::make_cyth_parser(bool do_file_IO) : cyth_parser_generator("./c
     MODULE_nonterm->add_production({ MODULE_nonterm, STATEMENT_nonterm, EOF_term }).set_action<module_AST_ptr>( module_add_ASTnode<statement_AST_ptr> );
     MODULE_nonterm->add_production({ MODULE_nonterm, COMPILERCOMMAND_term, STMT_term }).set_action<module_AST_ptr>( module_add_CompilerCommand );
     MODULE_nonterm->add_production({ MODULE_nonterm, COMPILERCOMMAND_term, EOF_term }).set_action<module_AST_ptr>( module_add_CompilerCommand );
+    MODULE_nonterm->add_production({ MODULE_nonterm, IF_nonterm }).set_action<module_AST_ptr>( module_add_ASTnode<conditional_AST_ptr>  );
+    MODULE_nonterm->add_production({ MODULE_nonterm, WHILE_nonterm }).set_action<module_AST_ptr>( module_add_ASTnode<loop_AST_ptr>  );
+    MODULE_nonterm->add_production({ MODULE_nonterm, FOR_nonterm }).set_action<module_AST_ptr>( module_add_ASTnode<loop_AST_ptr>  );
+
 
 
 
@@ -1116,8 +1435,31 @@ make_cyth_parser::make_cyth_parser(bool do_file_IO) : cyth_parser_generator("./c
     BLOCKlist_nonterm->add_production({ NEW_BLOCK_term }) .set_action<block_AST_ptr>( make_block_AST );
     BLOCKlist_nonterm->add_production({ BLOCKlist_nonterm, STATEMENT_nonterm, STMT_term }) .set_action<block_AST_ptr>( block_add_ASTnode<statement_AST_ptr> );
     BLOCKlist_nonterm->add_production({ BLOCKlist_nonterm, CONSTRUCT_BLOCK_nonterm }) .set_action<block_AST_ptr>( block_add_ASTnode<construct_AST_ptr> );
+    BLOCKlist_nonterm->add_production({ BLOCKlist_nonterm, IF_nonterm }) .set_action<block_AST_ptr>( block_add_ASTnode<conditional_AST_ptr> );
+    BLOCKlist_nonterm->add_production({ BLOCKlist_nonterm, WHILE_nonterm }) .set_action<block_AST_ptr>( block_add_ASTnode<loop_AST_ptr> );
+    BLOCKlist_nonterm->add_production({ BLOCKlist_nonterm, FOR_nonterm }) .set_action<block_AST_ptr>( block_add_ASTnode<loop_AST_ptr> );
 //BLOCKlist_nonterm->add_production({ BLOCKlist_nonterm, FUNC_DEF_nonterm }) .set_action<block_AST_ptr>( block_add_ASTnode<function_AST_ptr> ); // need to implement closure!! NOTE: when a closured variable goes out of scope, perhaps copy it to a dynamic variable?
 //BLOCKlist_nonterm->add_production({ BLOCKlist_nonterm, CLASS_DEF_nonterm }) .set_action<block_AST_ptr>( block_add_ASTnode<class_AST_ptr> ); // need to make sure this works
+
+
+
+    // conditionals
+    IF_nonterm->add_production({ IF_keyword, EXPRESSION_nonterm , BLOCK_nonterm }).set_action<conditional_AST_ptr>( make_IF_AST );
+    IF_nonterm->add_production({ IF_keyword, EXPRESSION_nonterm , BLOCK_nonterm, ELIF_nonterm }).set_action<conditional_AST_ptr>( make_IFchild_AST );
+    IF_nonterm->add_production({ IF_keyword, EXPRESSION_nonterm , BLOCK_nonterm, ELSE_nonterm }).set_action<conditional_AST_ptr>( make_IFchild_AST );
+
+    ELIF_nonterm->add_production({ ELIF_keyword, EXPRESSION_nonterm , BLOCK_nonterm }).set_action<conditional_AST_ptr>( make_ELIF_AST );
+    ELIF_nonterm->add_production({ ELIF_keyword, EXPRESSION_nonterm , BLOCK_nonterm, ELIF_nonterm }).set_action<conditional_AST_ptr>( make_ELIFchild_AST );
+    ELIF_nonterm->add_production({ ELIF_keyword, EXPRESSION_nonterm , BLOCK_nonterm, ELSE_nonterm }).set_action<conditional_AST_ptr>( make_ELIFchild_AST );
+
+    ELSE_nonterm->add_production({ ELSE_keyword , BLOCK_nonterm }).set_action<conditional_AST_ptr>( make_ELSE_AST );
+
+
+
+    // loops
+    WHILE_nonterm->add_production({ WHILE_keyword, EXPRESSION_nonterm , BLOCK_nonterm }).set_action<loop_AST_ptr>( make_WHILE_AST );
+    FOR_nonterm->add_production({ FOR_keyword, STATEMENT_nonterm , IN_keyword , STATEMENT_nonterm , WHILE_keyword , EXPRESSION_nonterm , BLOCK_nonterm }).set_action<loop_AST_ptr>( make_FOR_AST );
+
 
 
 
@@ -1126,7 +1468,7 @@ make_cyth_parser::make_cyth_parser(bool do_file_IO) : cyth_parser_generator("./c
 
     // this uses the symetry between LHS and RHS expressions to transform a RHS expression into a LHS reference.
     // This is used to get around the limitations of LALR(1), but still have distinct AST nodes for LHS references.
-    // This will make a compiler error (not an exception, non-blocking), if the RHS expression cannot be transformed into a LHS reference
+    // This will make a compiler error (not an exception, non-exiting), if the RHS expression cannot be transformed into a LHS reference
     // see notes about this function
     LHS_REFERENCE_nonterm->add_production({ EXPRESSION_nonterm }).set_action<LHSref_AST_ptr>( RHSexp_to_LHSref );
 
@@ -1136,10 +1478,17 @@ make_cyth_parser::make_cyth_parser(bool do_file_IO) : cyth_parser_generator("./c
     STATEMENT_nonterm->add_production({ EXPRESSION_nonterm }) .set_action<statement_AST_ptr>( make_statement_expression_AST );
     STATEMENT_nonterm->add_production({ TYPENAME_nonterm, IDENTIFIER_term}) .set_action<statement_AST_ptr>( make_statement_definition_AST );
     STATEMENT_nonterm->add_production({ TYPENAME_nonterm, IDENTIFIER_term, CALL_ARGUMENTS_nonterm }) .set_action<statement_AST_ptr>( make_statement_definitionNconstruction_AST );
+    STATEMENT_nonterm->add_production({ TYPENAME_nonterm, IDENTIFIER_term, EQUALS_symbol, EXPRESSION_nonterm }) .set_action<statement_AST_ptr>( make_statement_definitionNassignment_AST );
     //STATEMENT_nonterm->add_production({ IDENTIFIER_term, EQUALS_symbol, EXPRESSION_nonterm}) .set_action<statement_AST_ptr>( make_statement_assignment_AST ); // eventually this should use generic LHS symbols
     STATEMENT_nonterm->add_production({ LHS_REFERENCE_nonterm, EQUALS_symbol, EXPRESSION_nonterm}) .set_action<statement_AST_ptr>( make_statement_assignment_AST );
     STATEMENT_nonterm->add_production({ AUTO_keyword, IDENTIFIER_term, EQUALS_symbol, EXPRESSION_nonterm }) .set_action<statement_AST_ptr>( make_auto_definition_AST );
     STATEMENT_nonterm->add_production({ RETURN_keyword, EXPRESSION_nonterm }) .set_action<statement_AST_ptr>( make_statement_return_AST );
+// TODO: need return WITHOUT expression!
+    STATEMENT_nonterm->add_production({ BREAK_keyword }) .set_action<statement_AST_ptr>( make_simpleBreak_AST );
+    STATEMENT_nonterm->add_production({ CONTINUE_keyword }) .set_action<statement_AST_ptr>( make_simpleContinue_AST );
+    STATEMENT_nonterm->add_production({ BREAK_keyword, INT_term }) .set_action<statement_AST_ptr>( make_fullBreak_AST );
+    STATEMENT_nonterm->add_production({ CONTINUE_keyword, INT_term }) .set_action<statement_AST_ptr>( make_fullContinue_AST );
+
 
     //Expressions
     EXPRESSION_nonterm->add_production({ EXPRESSION_nonterm, CALL_ARGUMENTS_nonterm }) .set_action<expression_AST_ptr>( make_expression_funcCall_AST ).set_precedence();
@@ -1147,7 +1496,20 @@ make_cyth_parser::make_cyth_parser(bool do_file_IO) : cyth_parser_generator("./c
     EXPRESSION_nonterm->add_production({ EXPRESSION_nonterm, DOT_symbol, IDENTIFIER_term }) .set_action<expression_AST_ptr>( make_accessor_expression_AST ).set_precedence();
     EXPRESSION_nonterm->add_production({ INT_term }) .set_action<expression_AST_ptr>( make_intLiteral_AST );
     EXPRESSION_nonterm->add_production({ IDENTIFIER_term }) .set_action<expression_AST_ptr>( make_expression_varRef_AST );
+
+    EXPRESSION_nonterm->add_production({ EXPRESSION_nonterm, POW_symbol, EXPRESSION_nonterm }) .set_action<expression_AST_ptr>( make_expression_power_AST ).set_associativity( "LEFT" ).set_precedence();
+    EXPRESSION_nonterm->add_production({ EXPRESSION_nonterm, MUL_symbol, EXPRESSION_nonterm }) .set_action<expression_AST_ptr>( make_expression_multiplication_AST ).set_associativity( "LEFT" ).set_precedence();
+    EXPRESSION_nonterm->add_production({ EXPRESSION_nonterm, DIV_symbol, EXPRESSION_nonterm }) .set_action<expression_AST_ptr>( make_expression_division_AST ).set_associativity( "LEFT" ).set_precedence();
+    EXPRESSION_nonterm->add_production({ EXPRESSION_nonterm, MOD_symbol, EXPRESSION_nonterm }) .set_action<expression_AST_ptr>( make_expression_modulus_AST ).set_associativity( "LEFT" ).set_precedence();
     EXPRESSION_nonterm->add_production({ EXPRESSION_nonterm, PLUS_symbol, EXPRESSION_nonterm }) .set_action<expression_AST_ptr>( make_expression_addition_AST ).set_associativity( "LEFT" ).set_precedence();
+    EXPRESSION_nonterm->add_production({ EXPRESSION_nonterm, SUB_symbol, EXPRESSION_nonterm }) .set_action<expression_AST_ptr>( make_expression_subtraction_AST ).set_associativity( "LEFT" ).set_precedence();
+
+    EXPRESSION_nonterm->add_production({ EXPRESSION_nonterm, LES_symbol, EXPRESSION_nonterm }) .set_action<expression_AST_ptr>( make_expression_LessThan_AST ).set_associativity( "LEFT" ).set_precedence();
+    EXPRESSION_nonterm->add_production({ EXPRESSION_nonterm, GRE_symbol, EXPRESSION_nonterm }) .set_action<expression_AST_ptr>( make_expression_GreatThan_AST ).set_associativity( "LEFT" ).set_precedence();
+    EXPRESSION_nonterm->add_production({ EXPRESSION_nonterm, BEQ_symbol, EXPRESSION_nonterm }) .set_action<expression_AST_ptr>( make_expression_EqualTo_AST ).set_associativity( "LEFT" ).set_precedence();
+    EXPRESSION_nonterm->add_production({ EXPRESSION_nonterm, NEQ_symbol, EXPRESSION_nonterm }) .set_action<expression_AST_ptr>( make_expression_NotEqual_AST ).set_associativity( "LEFT" ).set_precedence();
+    EXPRESSION_nonterm->add_production({ EXPRESSION_nonterm, LEQ_symbol, EXPRESSION_nonterm }) .set_action<expression_AST_ptr>( make_expression_LessEqual_AST ).set_associativity( "LEFT" ).set_precedence();
+    EXPRESSION_nonterm->add_production({ EXPRESSION_nonterm, GEQ_symbol, EXPRESSION_nonterm }) .set_action<expression_AST_ptr>( make_expression_GreatEqual_AST ).set_associativity( "LEFT" ).set_precedence();
 
     //// set other lexer actions ////
     lex_gen->add_nonreturn_pattern("\" \"");//to eat spaces
