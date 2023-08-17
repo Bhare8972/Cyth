@@ -8,12 +8,15 @@ set(compiler ./compiler)
 
 include_directories ("${utils}")
 include_directories ("${compiler}")
+include_directories ("./tclap")
 
 ##C++ settings
-set(CMAKE_CXX_FLAGS "-std=c++0x -Wno-sign-compare")
-set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}  -Wall -Wno-sign-compare -Og -g")
+set(CMAKE_CXX_FLAGS "-Wno-sign-compare")
+set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}  -Wall -Wno-sign-compare -Og -ggdb -D_GLIBCXX_DEBUG")
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3")
 
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 add_executable(cyth
 	      ${compiler}/main.cpp
@@ -24,6 +27,9 @@ add_executable(cyth
 	      ${compiler}/writeAST_to_C.cpp
 	      ${compiler}/AST_visitor.cpp
 	      ${compiler}/basic_AST_visitors.cpp
+	      ${compiler}/c_compiler_interface.cpp
+	      ${compiler}/c_expressions.cpp
+	      ${compiler}/c_source_writer.cpp
 
               ${utils}/lexer.cpp
               ${utils}/logger.cpp
@@ -32,7 +38,7 @@ add_executable(cyth
               ${utils}/parser.cpp)
 
 
-
+target_link_libraries(${PROJECT_NAME} stdc++fs)
 
 
 
