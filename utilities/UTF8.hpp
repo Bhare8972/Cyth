@@ -182,8 +182,11 @@ public:
     void append(const uint32_t data);
 
     //overloaded operators
-    bool operator == (const utf8_string& rhs) const;
     //equals opperator
+    bool operator == (const utf8_string& rhs) const;
+    bool operator == (const char* rhs) const;
+
+    bool operator != (const char* rhs) const;
 
     utf8_string& operator=(const utf8_string& other);
     // copy assignment

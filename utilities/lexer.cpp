@@ -171,6 +171,20 @@ location_span csu::operator+( location_span& LHS, location_span& RHS)
 }
 
 
+bool location_span::is_comparible(const location_span& LHS)
+{
+    bool RHS_in_one_file = start.file_name == end.file_name;
+    bool LHS_in_one_file = LHS.start.file_name == LHS.end.file_name;
+    if( RHS_in_one_file and LHS_in_one_file )
+    {
+        if( start.file_name==LHS.start.file_name )
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
 bool location_span::strictly_GT(const location_span& LHS)
 {
     return start>LHS.end;
