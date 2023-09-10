@@ -126,6 +126,7 @@ public:
     virtual void expression_down(expression_AST_node* expression){}
     virtual void intLiteral_down(intLiteral_expression_AST_node* intLitExp){}
     virtual void binOperator_down(binOperator_expression_AST_node* binOprExp){}
+    virtual void binBoolOperator_down(binBoolOp_expression_AST_node* binBoolOprExp){}
     virtual void varReferance_down(varReferance_expression_AST_node* varRefExp){}
     virtual void ParenExpGrouping_down(ParenGrouped_expression_AST_node* parenGroupExp){}
     virtual void accessorExp_down(accessor_expression_AST_node* accessorExp){}
@@ -213,6 +214,7 @@ public:
     virtual void expression_up(expression_AST_node* expression){}
     virtual void intLiteral_up(intLiteral_expression_AST_node* intLitExp){}
     virtual void binOperator_up(binOperator_expression_AST_node* binOprExp, AST_visitor_base* LHS_exp_visitor, AST_visitor_base* RHS_exp_visitor){}
+    virtual void binBoolOperator_up(binBoolOp_expression_AST_node* binBoolOprExp, AST_visitor_base* LHS_exp_visitor, AST_visitor_base* RHS_exp_visitor){}
     virtual void varReferance_up(varReferance_expression_AST_node* varRefExp){}
     virtual void ParenExpGrouping_up(ParenGrouped_expression_AST_node* parenGroupExp, AST_visitor_base* expChild_visitor){}
     virtual void accessorExp_up(accessor_expression_AST_node* accessorExp, AST_visitor_base* expChild_visitor){}
@@ -417,6 +419,7 @@ public:
     void expression_up(expression_AST_node* expression) final {}
     void intLiteral_up(intLiteral_expression_AST_node* intLitExp) final {}
     void binOperator_up(binOperator_expression_AST_node* binOprExp, AST_visitor_base* LHS_exp_visitor, AST_visitor_base* RHS_exp_visitor) final {}
+    void binBoolOperator_up(binBoolOp_expression_AST_node* binBoolOprExp, AST_visitor_base* LHS_exp_visitor, AST_visitor_base* RHS_exp_visitor) final {}
     void varReferance_up(varReferance_expression_AST_node* varRefExp) final {}
     void ParenExpGrouping_up(ParenGrouped_expression_AST_node* parenGroupExp, AST_visitor_base* expChild_visitor) final {}
     void accessorExp_up(accessor_expression_AST_node* accessorExp, AST_visitor_base* expChild_visitor) final {}

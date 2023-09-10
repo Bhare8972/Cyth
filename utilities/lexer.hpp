@@ -556,6 +556,40 @@ public:
         lexer_states.reset();
         made_table=false;
 
+        /*
+        //read patterns and check they are the same
+        uint num_saved_patterns;
+        binary_read(fin, num_saved_patterns);
+        if(num_saved_patterns != patterns.size())
+        {
+            throw lexer_exception("Incompatible saved Lexar table");
+        }
+        for(uint i=0; i<num_saved_patterns; i++)
+        {
+            auto& internal_pattern = patterns[i];
+            unsigned int saved_action_number;
+            binary_read( fin, saved_action_number );
+            if(saved_action_number != internal_pattern.action_number)
+            {
+                throw lexer_exception("Incompatible saved Lexar table");
+            }
+
+            unsigned int saved_state;
+            binary_read(fin, saved_state);
+            if(saved_state != internal_pattern.state)
+            {
+                throw lexer_exception("Incompatible saved Lexar table");
+            }
+
+            std::string saved_reg_exp;
+            binary_read( fin, saved_reg_exp );
+            if( internal_pattern.regular_expression != saved_reg_exp.c_str() )
+            {
+                throw lexer_exception("Incompatible saved Lexar table");
+            }
+        }
+        */
+
         //get state_table
         unsigned int num_states=0;
         binary_read(fin, num_states);
@@ -598,6 +632,36 @@ public:
         if(not made_table) return;
 
         std::ofstream fout(state_table_file_name.to_cpp_string(), std::ios_base::binary);
+
+        /*
+        Can we read the inputs to file??
+        what are the inputs?
+        std::list< pattern > patterns;
+    struct pattern
+    {
+        utf8_string regular_expression;
+        unsigned int action_number;
+        unsigned int state;
+    };
+        */
+
+
+/*
+        //write paterns, for verification
+        uint num_patterns = patterns.size();
+        binary_write(fout, num_patterns);
+        for(auto& pat : patterns)
+        {
+           binary_write(fout, pat.action_number);
+           binary_write(fout, pat.state);
+
+           std::string OUT = pat.regular_expression.to_cpp_string();
+           binary_write(fout, OUT);
+        }
+*/
+
+
+
         //first we output state_table
         uint num_states=state_table->size();
         binary_write(fout, num_states);

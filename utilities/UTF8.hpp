@@ -194,6 +194,8 @@ public:
     utf8_string& operator=(utf8_string&& other);
     // move assignment
 
+
+
 };//end utf8_string
 
 std::ostream& operator<<(std::ostream& os, const utf8_string& str);

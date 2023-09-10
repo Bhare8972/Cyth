@@ -209,6 +209,7 @@ public:
 
     void intLiteral_up(intLiteral_expression_AST_node* intLitExp) override; // fully verfied
     void binOperator_up(binOperator_expression_AST_node* binOprExp, AST_visitor_base* LHS_exp_visitor, AST_visitor_base* RHS_exp_visitor) override;
+    void binBoolOperator_up(binBoolOp_expression_AST_node* binBoolOprExp, AST_visitor_base* LHS_exp_visitor, AST_visitor_base* RHS_exp_visitor) override;
     void varReferance_up(varReferance_expression_AST_node* varRefExp) override; // potentially verified
     void ParenExpGrouping_up(ParenGrouped_expression_AST_node* parenGroupExp, AST_visitor_base* expChild_visitor) override;
     void functionCall_Exp_up(functionCall_expression_AST_node* funcCall, AST_visitor_base* expression_child, AST_visitor_base* arguments_child) override;
@@ -296,6 +297,9 @@ public:
     void binOperator_down(binOperator_expression_AST_node* binOprExp) override
         { fail_if_not_verified(binOprExp, "binary expression"); }
 
+
+    void binBoolOperator_down(binBoolOp_expression_AST_node* binBoolOprExp) override
+        { fail_if_not_verified(binBoolOprExp, "binary bool expression"); }
 
     void LHS_varRef_up(LHS_varReference* varref) override
         { fail_if_not_verified(varref, "LHS variable reference"); }

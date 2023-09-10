@@ -954,7 +954,6 @@ public:
     std::string AST_node_name() override { return "int_ASTnode"; }
 };
 
-// NOTE: need to sub-class this in future for other operations, or something
 class binOperator_expression_AST_node : public expression_AST_node
 {
     //partial verification in build_types
@@ -978,8 +977,6 @@ public:
         notEqual_t,
         lessEqual_t,
         greatEqual_t,
-
-// boolean operators
     };
 
     enum expression_mode // set by vistor
@@ -1023,6 +1020,48 @@ public:
     std::string AST_node_name() override { return "binOp_ASTnode"; }
 
 };
+
+class binBoolOp_expression_AST_node : public expression_AST_node
+{
+    // boolean are seperate becouse I don't want a ton of if/else in the vistors
+
+    //partial verification in build_types
+    // verified in verify_symbol_table visitor
+public:
+    enum expression_type
+    {
+        empty,
+
+        and_t,
+        or_t
+    };
+
+    expression_type type_of_operation;
+
+    expression_AST_ptr left_operand;
+    expression_AST_ptr right_operand;
+
+    binBoolOp_expression_AST_node(expression_AST_ptr _left_operand, expression_type _type, expression_AST_ptr _right_operand);
+
+    const char* operator_name()
+    {
+        switch (type_of_operation)
+        {
+            case binBoolOp_expression_AST_node::empty:   return "empty";
+
+            case binBoolOp_expression_AST_node::and_t:   return "AND";
+            case binBoolOp_expression_AST_node::or_t: return "OR";
+        }
+        return "Mr. Good";
+    }
+
+    void apply_visitor_inner(AST_visitor_base* visitor) override;
+    std::string AST_node_name() override { return "binBoolOp_ASTnode"; }
+
+};
+
+
+
 
 class varReferance_expression_AST_node : public expression_AST_node
 {

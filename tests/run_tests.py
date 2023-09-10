@@ -78,8 +78,26 @@ if __name__ == "__main__":
         if expected_text !=  out.stdout:
             print("ERROR! test failed given output:")
             print()
-            print(out.stdout)
+            print('~'+out.stdout+'~')
             print()
+
+
+
+            shortest_L = min(len(expected_text), len(out.stdout) )
+            found = False
+            for i in range(shortest_L):
+                expec_char = expected_text[i]
+                got_char = out.stdout[i]
+                print(expec_char, end='')
+                if expec_char != got_char:
+                    print('~'+got_char+'~')
+                    found = True
+                    break
+            if not found:
+                print()
+                print('End diff e:~'+expected_text[i+1:]+'~g:'+out.stdout[i+1:]+'~')
+                print('e len:', len(expected_text[i+1:]), 'g len:', len(out.stdout[i+1:]))
+
             
         else:
             print("  test succsesful!")

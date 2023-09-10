@@ -78,8 +78,8 @@ def __main__()
             
             i = i+1
             
-    10.print_char()
-            
+    33.print_char()
+    newline()  
         
         
     

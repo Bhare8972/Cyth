@@ -22,8 +22,6 @@ This is the entry point for the Cyth compiler
 using namespace std;
 
 
-// adding break continue
-
 //PROBLEM. what happens in writeAST_to_C.cpp ::  function_argument_acclimator  if you have nested functiopns?
 
 
@@ -47,6 +45,9 @@ using namespace std;
 
 
 /// GENERAL FIXES ///
+
+// SOMEHOW need to check to make sure previous lexar/parser tabels are valid with current rules.
+
 // fix lexor to use quotations. Fix for strings
 
 // improve C variable naming
@@ -85,7 +86,7 @@ using namespace std;
 
 
 // NOTE: langauge has problem in that send-by-ref function calls can always "cast" so it is not obvious if call is truly by-reference or not
-//    May not be a problem
+//    May not be a problem.   NOTE FROM FUTURE: this is fixed. static variables are, var variables are not. This may not currently be inforced!!
 
 // function argument type in sym_table may need location?
 
@@ -113,14 +114,13 @@ using namespace std;
 
 // printing loc_span should only print fname once
 
+// self-pointer should actually be a struct that includes self-pointer, as well as a reference-block (like a shared-ptr that exists to say if memory is alive or not). This reference block is made when the memory-controlled variable is made (static, or var-variable is malloced)
+    //  this reference block is passed to all members of a class. Thus, everyone can have a shared-ptr that says if they are alive or not, essentially allowing safty-references.
+
 
 /// current work plan ///
 
-// currently trying to get ond_N_loop_TST to work
-
-// if, while, for loops
-
-// and/or/not
+//WORKING on And/Or , should work, needs testing!
 
 
 

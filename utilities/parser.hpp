@@ -249,6 +249,10 @@ public:
     non_terminal(utf8_string _name, unsigned int ID, parser_generator* _par_gen);
 
     production& add_production(std::initializer_list< token_string_converter > tokens);
+
+    // This serializes some info to file (writeCheck) so that later a consistancy check can be done (readCheck). Does not write enough info to truely reconstruct, or fully check consistancy of, the whole non_terminal
+    void binary_writeCheck(std::ostream& output);
+    void binary_readCheck(std::istream& input);
 };
 typedef std::shared_ptr<non_terminal> non_terminal_ptr;
 

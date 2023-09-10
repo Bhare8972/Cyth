@@ -1022,6 +1022,27 @@ expression_AST_ptr make_expression_GreatEqual_AST ( parser_function_class::data_
     return static_pointer_cast<expression_AST_node>( new_expression );
 }
 
+//EXPRESSION_nonterm AND_keyword EXPRESSION_nonterm
+expression_AST_ptr make_expression_And_AST ( parser_function_class::data_T& data )
+{
+    auto left_operand = data[0].data<expression_AST_ptr>();
+    auto right_operand = data[2].data<expression_AST_ptr>();
+
+    auto new_expression = make_shared<binBoolOp_expression_AST_node>( left_operand, binBoolOp_expression_AST_node::and_t, right_operand);
+    return static_pointer_cast<expression_AST_node>( new_expression );
+}
+
+//EXPRESSION_nonterm OR_keyword EXPRESSION_nonterm
+expression_AST_ptr make_expression_Or_AST ( parser_function_class::data_T& data )
+{
+    auto left_operand = data[0].data<expression_AST_ptr>();
+    auto right_operand = data[2].data<expression_AST_ptr>();
+
+    auto new_expression = make_shared<binBoolOp_expression_AST_node>( left_operand, binBoolOp_expression_AST_node::or_t, right_operand);
+    return static_pointer_cast<expression_AST_node>( new_expression );
+}
+
+
 
 
 
@@ -1193,6 +1214,8 @@ make_cyth_parser::make_cyth_parser(bool do_file_IO) : cyth_parser_generator("./c
     auto IN_keyword = cyth_parser_generator.new_terminal("in");
     auto BREAK_keyword = cyth_parser_generator.new_terminal("break");
     auto CONTINUE_keyword = cyth_parser_generator.new_terminal("continue");
+    auto AND_keyword = cyth_parser_generator.new_terminal("and");
+    auto OR_keyword = cyth_parser_generator.new_terminal("or");
 
     //symbols
     auto POW_symbol = cyth_parser_generator.new_terminal("^");
@@ -1245,6 +1268,8 @@ make_cyth_parser::make_cyth_parser(bool do_file_IO) : cyth_parser_generator("./c
     IN_keyword->add_pattern("in");
     BREAK_keyword->add_pattern("break");
     CONTINUE_keyword->add_pattern("continue");
+    AND_keyword->add_pattern("and");
+    OR_keyword->add_pattern("or");
 
     POW_symbol->add_pattern("^");
     MUL_symbol->add_pattern("[*]");
@@ -1511,11 +1536,16 @@ make_cyth_parser::make_cyth_parser(bool do_file_IO) : cyth_parser_generator("./c
     EXPRESSION_nonterm->add_production({ EXPRESSION_nonterm, LEQ_symbol, EXPRESSION_nonterm }) .set_action<expression_AST_ptr>( make_expression_LessEqual_AST ).set_associativity( "LEFT" ).set_precedence();
     EXPRESSION_nonterm->add_production({ EXPRESSION_nonterm, GEQ_symbol, EXPRESSION_nonterm }) .set_action<expression_AST_ptr>( make_expression_GreatEqual_AST ).set_associativity( "LEFT" ).set_precedence();
 
+    EXPRESSION_nonterm->add_production({ EXPRESSION_nonterm, AND_keyword, EXPRESSION_nonterm }) .set_action<expression_AST_ptr>( make_expression_And_AST ).set_associativity( "LEFT" ).set_precedence();
+    EXPRESSION_nonterm->add_production({ EXPRESSION_nonterm, OR_keyword, EXPRESSION_nonterm }) .set_action<expression_AST_ptr>( make_expression_Or_AST ).set_associativity( "LEFT" ).set_precedence();
+
     //// set other lexer actions ////
     lex_gen->add_nonreturn_pattern("\" \"");//to eat spaces
     //lex_gen->add_nonreturn_pattern("# (\" \"|[# _ 0-9 a-z A-Z ])* \\n");//comments?
 
     get_parser(do_file_IO); //force a build of the parser
+
+
 
 
 }

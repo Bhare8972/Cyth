@@ -117,6 +117,8 @@ public:
 
     void binOperator_up(binOperator_expression_AST_node* binOprExp, AST_visitor_base* LHS_exp_visitor, AST_visitor_base* RHS_exp_visitor) override;
 
+    void binBoolOperator_up(binBoolOp_expression_AST_node* binBoolOprExp, AST_visitor_base* LHS_exp_visitor, AST_visitor_base* RHS_exp_visitor) override;
+
     void varReferance_up(varReferance_expression_AST_node* varRefExp) override;
 
     void ParenExpGrouping_up(ParenGrouped_expression_AST_node* parenGroupExp, AST_visitor_base* expChild_visitor) override;

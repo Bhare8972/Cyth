@@ -2970,6 +2970,62 @@ void build_types::binOperator_up(binOperator_expression_AST_node* binOprExp, AST
     }
 }
 
+
+void build_types::binBoolOperator_up(binBoolOp_expression_AST_node* binBoolOprExp, AST_visitor_base* LHS_exp_visitor, AST_visitor_base* RHS_exp_visitor)
+{
+    if( binBoolOprExp->left_operand->verification_state==0 or binBoolOprExp->right_operand->verification_state==0  )
+    {
+        binBoolOprExp->verification_state = 0;
+        return;
+    }
+
+    if( binBoolOprExp->verification_state == 0 )
+    {
+        return;
+    }
+
+    varType_ptr LHS_type = binBoolOprExp->left_operand->expression_return_type;
+    varType_ptr RHS_type = binBoolOprExp->right_operand->expression_return_type;
+    if( LHS_type and RHS_type and not binBoolOprExp->expression_return_type)
+    {
+        if( not LHS_type->type_is_fully_defined() )
+        {
+            return;
+        }
+        if( not RHS_type->type_is_fully_defined() )
+        {
+            return;
+        }
+
+        utf8_string boolName("bool");
+        bool checkOrder = false;
+        auto boolType = binBoolOprExp->symbol_table->get_type_global(boolName, binBoolOprExp->loc, checkOrder);
+
+        if(  (not LHS_type->is_equivalent( boolType )) or (not LHS_type->can_implicit_castTo(boolType)) )
+        {
+            binBoolOprExp->verification_state = 0;
+            cout << "LHS-type" << LHS_type->definition_name << "cannot be converted to bool at " << binBoolOprExp->loc << endl;
+
+            binBoolOprExp->verification_state = 0;
+            return;
+        }
+
+        if(  (not RHS_type->is_equivalent( boolType )) or (not RHS_type->can_implicit_castTo(boolType)) )
+        {
+            binBoolOprExp->verification_state = 0;
+            cout << "RHS-type" << RHS_type->definition_name << "cannot be converted to bool at " << binBoolOprExp->loc << endl;
+
+            binBoolOprExp->verification_state = 0;
+            return;
+        }
+
+        binBoolOprExp->expression_return_type = boolType;
+        if(debug){ cout<< "build_types::binBoolOperator_up changed" <<endl;}
+        changes_were_made = true;
+        binBoolOprExp->verification_state = 1;
+    }
+}
+
 void build_types::varReferance_up(varReferance_expression_AST_node* varRefExp)
 {
     // fully verified

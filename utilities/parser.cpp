@@ -870,6 +870,21 @@ void parser_generator::load_to_file()
     if(not parser_table_generated) return;
     std::ofstream fout(parser_table_file_name.to_cpp_string(), std::ios_base::binary);
 
+/* save terminal names, non-terminals, and productions, to file */
+//std::map<utf8_string, terminal_ptr> terminals;  // just save the key. assume lexer handles the rest
+//std::map<utf8_string, non_terminal_ptr> non_terminals;
+   // non_terminal has:  std::list< std::shared_ptr<production> > productions;
+        //each production has:
+          //      std::vector<token_ptr> tokens;
+          //      parser_function_ptr action;
+          //      association assoc;
+          //      unsigned int precedence;
+
+          // probably need to write this in OOP way, otherwise all code will wind up here and be too complex
+
+
+
+
     //save state_table to the file
     unsigned int num_states = state_table->size();
     binary_write(fout, num_states);

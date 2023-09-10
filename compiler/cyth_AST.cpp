@@ -1732,6 +1732,36 @@ void binOperator_expression_AST_node::apply_visitor_inner(AST_visitor_base* visi
 
 }
 
+
+// binary boolean operator
+binBoolOp_expression_AST_node::binBoolOp_expression_AST_node(expression_AST_ptr _left_operand, expression_type _type, expression_AST_ptr _right_operand)
+{
+    left_operand = _left_operand;
+    type_of_operation = _type;
+    right_operand = _right_operand;
+    loc = left_operand->loc + right_operand->loc;
+}
+
+void binBoolOp_expression_AST_node::apply_visitor_inner(AST_visitor_base* visitor)
+{
+    visitor->binBoolOperator_down( this );
+    visitor->expression_down( this );
+    visitor->ASTnode_down( this );
+
+    if( not visitor->apply_to_children() ){ return; }
+
+    visitor->initiate_children( 2 );
+    AST_visitor_base* LHS_child = visitor->get_child(0) ;
+    left_operand->apply_visitor( LHS_child );
+    AST_visitor_base* RHS_child = visitor->get_child(1) ;
+    right_operand->apply_visitor( RHS_child );
+
+    visitor->binBoolOperator_up( this, LHS_child, RHS_child );
+    visitor->expression_up( this );
+    visitor->ASTnode_up( this );
+
+}
+
 //variable name reference
 varReferance_expression_AST_node::varReferance_expression_AST_node(csu::utf8_string _var_name, csu::location_span _loc)
 {
