@@ -241,9 +241,11 @@ module_AST_ptr module_manager::parse_module(string canonical_module_fname, bool 
     if( found_module != parsed_modules.end() )
     {   return found_module->second; }
 
-    cout << "parsing file " << canonical_module_fname << endl;
 
     shared_ptr<parser> cyth_parser =  cyth_parser_generator.get_parser();
+
+    cout << "parsing file " << canonical_module_fname << endl;
+
 
     //ifstream input_file;
     //input_file.open(module_fname);

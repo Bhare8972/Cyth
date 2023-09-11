@@ -21,9 +21,9 @@ void binary_read(std::istream& input, T& to_read)
     input.read((char*)&to_read,sizeof(to_read));
 }
 
-
 // for CPP string
-void binary_write(std::ostream& output, std::string& input)
+template<>
+inline void binary_write<std::string&>(std::ostream& output, std::string& input)
 {
     uint L = input.size();
     binary_write(output, L );
@@ -33,7 +33,8 @@ void binary_write(std::ostream& output, std::string& input)
     }
 }
 
-std::string binary_read(std::istream& input, std::string& out)
+template<>
+inline void binary_read<std::string>(std::istream& input, std::string& out)
 {
     uint L;
     binary_read(input, L);
@@ -45,7 +46,7 @@ std::string binary_read(std::istream& input, std::string& out)
         binary_read(input, I);
         out[i] = I;
     }
-    return out;
 }
+
 
 #endif

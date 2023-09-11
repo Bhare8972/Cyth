@@ -2253,6 +2253,7 @@ DefClassType::DefClassType(utf8_string _name, utf8_string _c_name, bool _is_orde
 bool DefClassType::is_equivalent(varType_ptr RHS)
 {
     //return ((void*)this) == ((void*)RHS);
+    cout <<"TEST DefClassType::is_equivalent "<< (C_name == RHS->C_name) <<" "<< C_name<< " " << (RHS->C_name) <<endl;
     return (RHS->type_of_type==varType::defined_class_t) and (C_name == RHS->C_name); // I hope this works.
 }
 

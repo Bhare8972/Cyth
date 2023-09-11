@@ -120,6 +120,8 @@ using namespace std;
 
 /// current work plan ///
 
+// Need to print to screen when building the language!!
+// also, simulationsly, working on throwing warning if grammer changes.
 //WORKING on And/Or , should work, needs testing!
 
 
