@@ -218,11 +218,13 @@ private:
     unsigned int lexer_state;
     bool continue_lexing_b; //a variable to tell if we keep lexing after we kind a token?
 
+    std::string language_version;
+
 public:
 
     location loc;
 
-    lexer(lex_func_t _EOF_action, std::shared_ptr< std::vector< std::shared_ptr<DFA_state> > > _state_table,
+    lexer(std::string _lang_vers, lex_func_t _EOF_action, std::shared_ptr< std::vector< std::shared_ptr<DFA_state> > > _state_table,
                 std::shared_ptr< std::vector< lex_func_t > > _actions, std::shared_ptr< std::vector< unsigned int> > _lexer_states)
     {
         continue_lexing_b=false;
@@ -233,6 +235,7 @@ public:
         lexer_states=_lexer_states;
         std::stringstream tmp;
         input_buffer=std::shared_ptr<ring_buffer>(new ring_buffer(tmp));
+        language_version = _lang_vers;
     }
 
     lexer( const lexer<return_type>& RHS)
@@ -245,9 +248,16 @@ public:
         lexer_states = RHS.lexer_states;
         std::stringstream tmp;
         input_buffer = std::shared_ptr<ring_buffer>(new ring_buffer(tmp));
+
+        language_version = RHS.language_version;
     }
 
     virtual ~lexer() = default;
+
+    std::string get_language_version()
+    {
+        return language_version;
+    }
 
     void print_machine()
     {
@@ -448,6 +458,7 @@ private:
 
     lex_func_t EOF_action;
 
+    std::string language_version; // this is a user-set variable to show "version number of the language". Useful to not mix incompatible versions
 public:
 
 
@@ -457,6 +468,17 @@ public:
         current_state=0;
         made_table=false;
         actions=std::shared_ptr< std::vector< lex_func_t > >( new std::vector< lex_func_t > );
+        language_version="";
+    }
+
+    void set_language_version(std::string& _langversion)
+    {
+        language_version = _langversion;
+    }
+
+    std::string get_language_version()
+    {
+        return language_version;
     }
 
     unsigned int increment_state()
@@ -542,7 +564,7 @@ public:
             }
         }
 
-        return std::make_shared< lexertype >(EOF_action, state_table, actions, lexer_states);
+        return std::make_shared< lexertype >(language_version, EOF_action, state_table, actions, lexer_states);
     }
 
     void load_from_file()
@@ -558,11 +580,33 @@ public:
 
         /*
         //read patterns and check they are the same
+
+        uint V; // for checking format changes
+        binary_read(fin, V);
+        if(V != 1)
+        {
+            //throw lexer_exception("Incompatible saved Lexar table");
+            cout<<"Incompatible saved Lexar table"<<std::endl;
+            return;
+        }
+
+        std::string saved_version;
+        binary_read( fin, saved_version );
+        if(language_version != saved_version)
+        {
+            //throw lexer_exception("Incompatible saved Lexar table");
+            cout<<"Incompatible saved Lexar table"<<std::endl;
+            return;
+        }
+
+
         uint num_saved_patterns;
         binary_read(fin, num_saved_patterns);
         if(num_saved_patterns != patterns.size())
         {
-            throw lexer_exception("Incompatible saved Lexar table");
+            //throw lexer_exception("Incompatible saved Lexar table");
+            cout<<"Incompatible saved Lexar table"<<std::endl;
+            return;
         }
         for(uint i=0; i<num_saved_patterns; i++)
         {
@@ -571,21 +615,27 @@ public:
             binary_read( fin, saved_action_number );
             if(saved_action_number != internal_pattern.action_number)
             {
-                throw lexer_exception("Incompatible saved Lexar table");
+                //throw lexer_exception("Incompatible saved Lexar table");
+                cout<<"Incompatible saved Lexar table"<<std::endl;
+                return;
             }
 
             unsigned int saved_state;
             binary_read(fin, saved_state);
             if(saved_state != internal_pattern.state)
             {
-                throw lexer_exception("Incompatible saved Lexar table");
+                //throw lexer_exception("Incompatible saved Lexar table");
+                cout<<"Incompatible saved Lexar table"<<std::endl;
+                return;
             }
 
             std::string saved_reg_exp;
             binary_read( fin, saved_reg_exp );
             if( internal_pattern.regular_expression != saved_reg_exp.c_str() )
             {
-                throw lexer_exception("Incompatible saved Lexar table");
+                //throw lexer_exception("Incompatible saved Lexar table");
+                cout<<"Incompatible saved Lexar table"<<std::endl;
+                return;
             }
         }
         */
@@ -633,21 +683,13 @@ public:
 
         std::ofstream fout(state_table_file_name.to_cpp_string(), std::ios_base::binary);
 
-        /*
-        Can we read the inputs to file??
-        what are the inputs?
-        std::list< pattern > patterns;
-    struct pattern
-    {
-        utf8_string regular_expression;
-        unsigned int action_number;
-        unsigned int state;
-    };
-        */
-
-
 /*
         //write paterns, for verification
+        uint V = 1; // update this number for breaking changes to format.
+        binary_write(fout, V);
+
+        binary_write(fout, language_version);
+
         uint num_patterns = patterns.size();
         binary_write(fout, num_patterns);
         for(auto& pat : patterns)

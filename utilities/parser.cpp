@@ -661,6 +661,18 @@ parser_generator::parser_generator(utf8_string _parser_table_file_name, utf8_str
     terminals["EOF"] = EOF_terminal;
 
     lex_gen->set_EOF_action(lexer_function_generic(EOF_terminal->token_ID, true));
+    language_version = "";
+}
+
+void parser_generator::set_language_version(std::string& _lang_version)
+{
+   language_version = _lang_version;
+}
+
+
+std::string parser_generator::get_language_version()
+{
+    return language_version;
 }
 
 terminal_ptr parser_generator::get_EOF_terminal()
@@ -770,7 +782,7 @@ shared_ptr<parser> parser_generator::get_parser(bool do_file_IO)
     }
 
     auto new_lex = lex_gen->get_lexer(do_file_IO);
-    return make_shared< parser >(new_lex, term_map, production_information, state_table);
+    return make_shared< parser >(language_version, new_lex, term_map, production_information, state_table);
 }
 
 void parser_generator::resolve_unknown_terminal(token_ptr _new_terminal) //this is for when the terminal is referanced by a string
@@ -883,7 +895,12 @@ void parser_generator::load_to_file()
           // probably need to write this in OOP way, otherwise all code will wind up here and be too complex
 
 
+/*
+    uint V = 1; // update this number for breaking changes to format.
+    binary_write(fout, V);
 
+    binary_write(fout, language_version);
+*/
 
     //save state_table to the file
     unsigned int num_states = state_table->size();
@@ -1552,7 +1569,7 @@ void parser_generator::generate_parser_table()
 
 
 //begin parser class
-parser::parser(std::shared_ptr<lexer<token_data> > _lex, shared_ptr< map<unsigned int, utf8_string> > _term_map,
+parser::parser(std::string _lang_version, std::shared_ptr<lexer<token_data> > _lex, shared_ptr< map<unsigned int, utf8_string> > _term_map,
        shared_ptr< vector<production_info_ptr> > _production_information, shared_ptr< vector<parser_state> > _state_table) : lex(_lex)
 {
     lex = _lex;
@@ -1560,11 +1577,17 @@ parser::parser(std::shared_ptr<lexer<token_data> > _lex, shared_ptr< map<unsigne
     production_information = _production_information;
     state_table = _state_table;
     error_recovery = 0;
+    language_version = _lang_version;
+}
+
+std::string parser::get_language_version()
+{
+    return language_version;
 }
 
 shared_ptr<parser> parser::copy()
 {
-    return shared_ptr<parser>( new parser(lex, term_map, production_information, state_table));
+    return shared_ptr<parser>( new parser(language_version, lex, term_map, production_information, state_table));
 }
 
 dyn_holder parser::parse(bool reporting)

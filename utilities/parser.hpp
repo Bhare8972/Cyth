@@ -487,8 +487,14 @@ private:
     std::shared_ptr< std::vector<production_info_ptr> > production_information;
     std::shared_ptr< std::vector<parser_state> > state_table;
 
+    std::string language_version;
+
 public:
     parser_generator(utf8_string _parser_table_file_name, utf8_string _lexer_table_file_name);
+
+    void set_language_version(std::string& _lang_version);
+    std::string get_language_version();
+
 
     //functions to define the languege
     terminal_ptr get_EOF_terminal();
@@ -529,7 +535,7 @@ public:
 
         std::shared_ptr<lexertype> new_lex = lex_gen->get_lexer<lexertype>(do_file_IO);
         auto new_lex2 = std::static_pointer_cast< lexer<token_data> >( new_lex );
-        return std::make_shared< parser >(new_lex2, term_map, production_information, state_table);
+        return std::make_shared< parser >(language_version, new_lex2, term_map, production_information, state_table);
     }
 
 private: //functions usefull for terminal and non_terminal
@@ -570,11 +576,15 @@ private:
     void state_string(std::ostream& os);
     int parse_step(bool reporting=false);
 
+    std::string language_version;
+
 public:
     std::shared_ptr<lexer<token_data> > lex;
 
-    parser(std::shared_ptr<lexer<token_data> > _lex, std::shared_ptr< std::map<unsigned int, utf8_string> > _term_map,
+    parser(std::string _lang_version, std::shared_ptr<lexer<token_data> > _lex, std::shared_ptr< std::map<unsigned int, utf8_string> > _term_map,
            std::shared_ptr< std::vector<production_info_ptr> > _production_information, std::shared_ptr< std::vector<parser_state> > _state_table);
+
+    std::string get_language_version()
 
     std::shared_ptr<parser> copy();
     dyn_holder parse(bool reporting=false);
