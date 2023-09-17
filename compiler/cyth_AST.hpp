@@ -1033,7 +1033,8 @@ public:
         empty,
 
         and_t,
-        or_t
+        or_t,
+        xor_t,
     };
 
     expression_type type_of_operation;
@@ -1051,6 +1052,7 @@ public:
 
             case binBoolOp_expression_AST_node::and_t:   return "AND";
             case binBoolOp_expression_AST_node::or_t: return "OR";
+            case binBoolOp_expression_AST_node::xor_t: return "XOR";
         }
         return "Mr. Good";
     }

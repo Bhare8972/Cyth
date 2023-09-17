@@ -715,27 +715,8 @@ void source_expression_visitor::intLiteral_up(intLiteral_expression_AST_node* in
         cy_int_type->C_definition_name( output_name, source_fout );
         source_fout->out_strm() << ';' << endl;
         cy_int_type->initialize( output_name, source_fout );
-       // auto LHS_writer = make_shared<simple_C_expression>( output_name, cy_int_type,
-         //                                                  true, false );
-        auto LHS_writer = make_shared<owned_name>( cy_int_type, output_name );
 
-// SO HACKY!!!
-//        utf8_string unnamed_C_name( "UNNAMED_C_TYPE" );
-//        bool check_order = false;
-//        auto unnamed_C_type = intLitExp->symbol_table->get_type_global(unnamed_C_name, intLitExp->loc, check_order);
-//        auto RHS_writer = make_shared<simple_C_expression>( intLitExp->literal, unnamed_C_type );
-//
-//        utf8_string errorTMP;
-//        if( cy_int_type->has_explicit_copy_constructor(unnamed_C_type, errorTMP) )
-//        {
-//            cy_int_type->write_explicit_copy_constructor(LHS_writer, RHS_writer, source_fout);
-//        }
-//        else
-//        {
-//            throw gen_exception("cannot construct int in source_expression_visitor::intLiteral_up ");
-//        }
-//
-//        RHS_writer->write_cleanup( source_fout );
+        auto LHS_writer = make_shared<owned_name>( cy_int_type, output_name );
 
         cy_int_type->write_default_constructor(output_name, source_fout);
 
@@ -744,17 +725,9 @@ void source_expression_visitor::intLiteral_up(intLiteral_expression_AST_node* in
         source_fout->out_strm() <<  source_fout->ln_strt << val_setter->get_C_expression() << '=' << intLitExp->literal << ';' << endl;
         val_setter->write_cleanup( source_fout );
 
-        //source_fout->out_strm() <<  source_fout->ln_strt << output_name << ".__val__ = " <<  intLitExp->literal << ';' << endl;
 
         final_expression = LHS_writer;
 
-
-//        utf8_string mbmr_name("__val__");
-//        cy_int_type->write_member_setter(LHS_writer, cmbmr_name, RHS_writer, source_fout );
-//
-//
-//        intLitExp->writer = make_shared<simple_expression_writer>( output_name );
-//        intLitExp->c_exp_can_be_referenced = true;
     }
 }
 
@@ -931,134 +904,175 @@ default:
 
 
 
-void source_expression_visitor::binBoolOperator_up(binBoolOp_expression_AST_node* binBoolOprExp, AST_visitor_base* LHS_exp_visitor, AST_visitor_base* RHS_exp_visitor)
+void source_expression_visitor::binBoolOperator_down(binBoolOp_expression_AST_node* binBoolOprExp)
 {
-    source_expression_visitor* LHS_visitor = dynamic_cast<source_expression_visitor*>(LHS_exp_visitor);
-    source_expression_visitor* RHS_visitor = dynamic_cast<source_expression_visitor*>(RHS_exp_visitor);
-
-    auto LHS_Cexp = LHS_visitor->final_expression;
-    auto LHS_type = LHS_Cexp->cyth_type;
-    auto RHS_Cexp = RHS_visitor->final_expression;
-    auto RHS_type = RHS_Cexp->cyth_type;
-
-    auto return_type = binBoolOprExp->expression_return_type; // should be bool!
-    auto bool_type = return_type; // for readability!
+cout<<'a'<<endl;
+    do_children = false;  // we need to do something weird to allow for short circuiting
 
 
-
-    C_expression_ptr LHS_exp_to_use; // make sure to add this to cleanup!
-    if( bool_type->is_equivalent(LHS_type) )
+// a function to avoid code bloat
+    struct {
+    C_expression_ptr operator() (expression_AST_ptr operand, varType_ptr bool_type, Csource_out_ptr source_fout)
     {
-        LHS_exp_to_use = LHS_Cexp;
+    // write the expression
+        source_expression_visitor opVisitor( source_fout );
+        operand->apply_visitor( &opVisitor );
+
+        auto Op_Cexp = opVisitor.final_expression;
+        auto Op_type = Op_Cexp->cyth_type;
+
+    // make sure is a bool
+        C_expression_ptr exp_to_use;
+
+        if( bool_type->is_equivalent(Op_type) )
+        {
+            exp_to_use = Op_Cexp;
+        }
+        else if( bool_type->has_implicit_copy_constructor(Op_type, cast_enum::pntr_casts) )
+        {
+            utf8_string LHS_bool_var = "__TMP_bool_" + source_fout->get_unique_string();
+
+            bool_type->C_definition_name(LHS_bool_var, source_fout);
+            source_fout->out_strm() << ';' << endl;
+            bool_type->initialize(LHS_bool_var, source_fout);
+            exp_to_use = make_shared<owned_name>(bool_type, LHS_bool_var);
+
+            bool_type->write_implicit_copy_constructor( exp_to_use, Op_Cexp,
+                                        source_fout, cast_enum::pntr_casts);
+
+            exp_to_use->add_cleanup_child( Op_Cexp );
+        }
+        else if( Op_type->can_implicit_castTo(bool_type) )
+        {
+            utf8_string LHS_bool_var = "__TMP_bool_" + source_fout->get_unique_string();
+
+            bool_type->C_definition_name(LHS_bool_var, source_fout);
+            source_fout->out_strm() << ';' << endl;
+            bool_type->initialize(LHS_bool_var, source_fout);
+            exp_to_use = make_shared<owned_name>(bool_type, LHS_bool_var);
+
+            Op_type->write_implicit_castTo( exp_to_use, Op_Cexp, source_fout);
+
+            exp_to_use->add_cleanup_child( Op_Cexp );
+        }
+        else
+        {
+            throw gen_exception("This should not be reached. Type ", Op_type->definition_name, " cannot be implicitly converted to bool. at",
+                                operand->loc);
+        }
+
+    // get C-expression
+
+        Op_Cexp = bool_type->toC(exp_to_use,  source_fout);
+
+        Op_Cexp->add_cleanup_child( exp_to_use );
+
+        return Op_Cexp;
+
     }
-    else if( bool_type->has_implicit_copy_constructor(LHS_type, cast_enum::pntr_casts) )
-    {
-        utf8_string LHS_bool_var = "__TMP_bool_" + source_fout->get_unique_string();
-
-        bool_type->C_definition_name(LHS_bool_var, source_fout);
-        source_fout->out_strm() << ';' << endl;
-        bool_type->initialize(LHS_bool_var, source_fout);
-        LHS_exp_to_use = make_shared<owned_name>(bool_type, LHS_bool_var);
-
-        bool_type->write_implicit_copy_constructor( LHS_exp_to_use, LHS_Cexp,
-                                    source_fout, cast_enum::pntr_casts);
-
-        LHS_Cexp->cleanup_this( source_fout );
-    }
-    else if( LHS_type->can_implicit_castTo(bool_type) )
-    {
-        utf8_string LHS_bool_var = "__TMP_bool_" + source_fout->get_unique_string();
-
-        bool_type->C_definition_name(LHS_bool_var, source_fout);
-        source_fout->out_strm() << ';' << endl;
-        bool_type->initialize(LHS_bool_var, source_fout);
-        LHS_exp_to_use = make_shared<owned_name>(bool_type, LHS_bool_var);
-
-        LHS_type->write_implicit_castTo( LHS_exp_to_use, LHS_Cexp, source_fout);
-
-        LHS_Cexp->cleanup_this( source_fout );
-    }
-    else
-    {
-        throw gen_exception("This should not be reached. LHS Type ", LHS_type->definition_name, " cannot be implicitly converted to bool. at",
-                            binBoolOprExp->loc);
-    }
+    } writeBoolExp;
 
 
 
-    C_expression_ptr RHS_exp_to_use; // make sure to add this to cleanup!
-    if( bool_type->is_equivalent(RHS_type) )
-    {
-        RHS_exp_to_use = RHS_Cexp;
-    }
-    else if( bool_type->has_implicit_copy_constructor(RHS_type, cast_enum::pntr_casts) )
-    {
-        utf8_string RHS_bool_var = "__TMP_bool_" + source_fout->get_unique_string();
-
-        bool_type->C_definition_name(RHS_bool_var, source_fout);
-        source_fout->out_strm() << ';' << endl;
-        bool_type->initialize(RHS_bool_var, source_fout);
-        RHS_exp_to_use = make_shared<owned_name>(bool_type, RHS_bool_var);
-
-        bool_type->write_implicit_copy_constructor( RHS_exp_to_use, RHS_Cexp,
-                                    source_fout, cast_enum::pntr_casts);
-
-        RHS_Cexp->cleanup_this( source_fout );
-    }
-    else if( RHS_type->can_implicit_castTo(bool_type) )
-    {
-        utf8_string RHS_bool_var = "__TMP_bool_" + source_fout->get_unique_string();
-
-        bool_type->C_definition_name(RHS_bool_var, source_fout);
-        source_fout->out_strm() << ';' << endl;
-        bool_type->initialize(RHS_bool_var, source_fout);
-        RHS_exp_to_use = make_shared<owned_name>(bool_type, RHS_bool_var);
-
-        RHS_type->write_implicit_castTo( RHS_exp_to_use, RHS_Cexp, source_fout);
-
-        RHS_Cexp->cleanup_this( source_fout );
-    }
-    else
-    {
-        throw gen_exception("This should not be reached. RHS Type ", RHS_type->definition_name, " cannot be implicitly converted to bool. at",
-                            binBoolOprExp->loc);
-    }
+    varType_ptr bool_type = binBoolOprExp->expression_return_type; // ought to be correct
 
 
+/// first write LHS
+    auto LHS_cExp = writeBoolExp( binBoolOprExp->left_operand, bool_type, source_fout);
 
-    utf8_string C_operation;
 
+/// define and initialize output variable
+    auto output_name = "__cy__tmp_" + source_fout->get_unique_string();
+
+    bool_type->C_definition_name( output_name, source_fout );
+    source_fout->out_strm() << ';' << endl;
+    bool_type->initialize( output_name, source_fout );
+    bool_type->write_default_constructor(output_name, source_fout);
+
+    final_expression = make_shared<owned_name>( bool_type, output_name );
+
+
+    utf8_string member("__val__");
+
+/// operator specific details
     if( binBoolOprExp->type_of_operation == binBoolOp_expression_AST_node::and_t )
     {
-        C_operation = "("+ LHS_Cexp->get_C_expression()+") and (" + RHS_Cexp->get_C_expression() + ")";
+    // initialize to false
+        auto val_setter = bool_type->write_member_getref( final_expression, member, source_fout );
+        source_fout->out_strm() <<  source_fout->ln_strt << val_setter->get_C_expression() << "= 0;" << endl;
+        val_setter->write_cleanup( source_fout );
+
+    // check LHS
+        source_fout->out_strm() <<  source_fout->ln_strt << "if("<< LHS_cExp->get_C_expression() <<"){"<< endl;
+
+    // write RHS
+        auto RHS_cExp = writeBoolExp( binBoolOprExp->right_operand, bool_type, source_fout);
+    // check RHS
+        source_fout->out_strm() <<  source_fout->ln_strt << "if("<< RHS_cExp->get_C_expression() <<"){"<< endl;
+
+        // our value is true!
+        val_setter = bool_type->write_member_getref( final_expression, member, source_fout );
+        source_fout->out_strm() <<  source_fout->ln_strt << val_setter->get_C_expression() << "= 1;" << endl;
+        val_setter->write_cleanup( source_fout );
+
+    // cleanup!!
+        source_fout->out_strm() <<  source_fout->ln_strt << "}" << endl;
+        RHS_cExp->write_cleanup( source_fout );
+
+        source_fout->out_strm() <<  source_fout->ln_strt << "}" << endl;
+
     }
     else if( binBoolOprExp->type_of_operation == binBoolOp_expression_AST_node::or_t )
     {
-        C_operation = "("+ LHS_Cexp->get_C_expression()+") or (" + RHS_Cexp->get_C_expression() + ")";
+    // initialize to true
+        auto val_setter = bool_type->write_member_getref( final_expression, member, source_fout );
+        source_fout->out_strm() <<  source_fout->ln_strt << val_setter->get_C_expression() << "= 1;" << endl;
+        val_setter->write_cleanup( source_fout );
+
+    // check LHS
+        source_fout->out_strm() <<  source_fout->ln_strt << "if( !("<< LHS_cExp->get_C_expression() <<")){"<< endl;
+
+    // write RHS
+        auto RHS_cExp = writeBoolExp( binBoolOprExp->right_operand, bool_type, source_fout);
+    // check RHS
+        source_fout->out_strm() <<  source_fout->ln_strt << "if( !("<< RHS_cExp->get_C_expression() <<")){"<< endl;
+
+        // our value is true!
+        val_setter = bool_type->write_member_getref( final_expression, member, source_fout );
+        source_fout->out_strm() <<  source_fout->ln_strt << val_setter->get_C_expression() << "= 0;" << endl;
+        val_setter->write_cleanup( source_fout );
+
+    // cleanup!!
+        source_fout->out_strm() <<  source_fout->ln_strt << "}" << endl;
+        RHS_cExp->write_cleanup( source_fout );
+
+        source_fout->out_strm() <<  source_fout->ln_strt << "}" << endl;
+
+    }
+    else if( binBoolOprExp->type_of_operation == binBoolOp_expression_AST_node::xor_t )
+    {
+      // no short-circuiting!!
+     // write RHS
+        auto RHS_cExp = writeBoolExp( binBoolOprExp->right_operand, bool_type, source_fout);
+
+     // set
+
+        auto val_setter = bool_type->write_member_getref( final_expression, member, source_fout );
+        source_fout->out_strm() <<  source_fout->ln_strt << val_setter->get_C_expression() << "= ( !(" << LHS_cExp->get_C_expression() << ") != !(" << RHS_cExp->get_C_expression() << "));"<< endl;
+        val_setter->write_cleanup( source_fout );
+
+    // cleanup!!
+        RHS_cExp->write_cleanup( source_fout );
+
     }
     else
     {
         throw gen_exception("This should not be reached in source_expression_visitor::binBoolOperator_up");
     }
-    LHS_Cexp->write_cleanup( source_fout );
-    RHS_Cexp->write_cleanup( source_fout );
 
+    LHS_cExp->write_cleanup( source_fout );
 
-    auto output_name = "__cy__tmp_" + source_fout->get_unique_string();
-
-    return_type->C_definition_name( output_name, source_fout );
-    source_fout->out_strm() << ';' << endl;
-    return_type->initialize( output_name, source_fout );
-
-    final_expression = make_shared<owned_name>( return_type, output_name );
-
-
-    return_type->write_default_constructor(output_name, source_fout);
-
-    utf8_string member("__val__");
-    auto val_setter = return_type->write_member_getref( final_expression, member, source_fout );
-    source_fout->out_strm() <<  source_fout->ln_strt << val_setter->get_C_expression() << "= (" << C_operation << ");" << endl;
-    val_setter->write_cleanup( source_fout );
+cout<<'b'<<endl;
 }
 
 void source_expression_visitor::varReferance_up(varReferance_expression_AST_node* varRefExp)
@@ -2191,7 +2205,6 @@ public:
         }
 
         // write block of statements
-
         source_statement_visitor statement_writer( source_fout );
         funcDef->block_AST->apply_visitor( &statement_writer );
 
@@ -2204,6 +2217,8 @@ public:
     void methodDef_up(method_AST_node* methodDef, AST_visitor_base* returnType_child, AST_visitor_base* paramList_child,
                               AST_visitor_base* methodBody_child)
     {
+
+cout<<"YOU"<<endl;
         auto self_var = methodDef->funcType->self_ptr_name;
 
         methodDef->specific_overload->write_C_prototype( source_fout );
@@ -2378,6 +2393,7 @@ public:
             }
         }
 
+cout<<"the snurg needs its blurg"<<endl;
 
 
         // write block of statements
@@ -2411,6 +2427,7 @@ public:
 
         source_fout->leave_scope();
         source_fout->out_strm() << source_fout->ln_strt << "}" << endl << endl;
+cout<<"ME"<<endl;
     }
 
 
@@ -2665,7 +2682,6 @@ public:
 
 void write_module_to_C(module_AST_ptr module)
 {
-
     //// first we write the header ///
     string header_fname = module->C_header_fname;
     string source_fname = module->C_source_fname;
@@ -2684,7 +2700,6 @@ void write_module_to_C(module_AST_ptr module)
     header_writeDefinitions_visitor definitions_writer(C_header_file, header_fname);
     module->apply_visitor( &definitions_writer );
 
-
     //// now we write the source files ////
     //ofstream C_source_file(source_fname);
     auto C_source_file = make_shared<output_Csource_file>( source_fname );
@@ -2694,16 +2709,13 @@ void write_module_to_C(module_AST_ptr module)
     module->apply_visitor( &preamble_writer );
 
     // main body
-    // functions!
+    // functions
     source_function_visitor function_writer(C_source_file);
     module->apply_visitor( &function_writer );
 
     // module setup (top level expressions, call other module setups)
     source_moduleExpresion_visitor initilizer_writer(C_source_file);
     module->apply_visitor( &initilizer_writer );
-
-
-
 }
 
 

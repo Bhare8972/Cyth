@@ -1049,9 +1049,9 @@ expression_AST_ptr make_expression_Or_AST ( parser_function_class::data_T& data 
 
 
 //// lexer
-cython_lexer::cython_lexer(lex_func_t _EOF_action, std::shared_ptr< std::vector< std::shared_ptr<csu::DFA_state> > > _state_table,
-                std::shared_ptr< std::vector< lex_func_t > > _actions, std::shared_ptr< std::vector< unsigned int> > _lexer_states) :
-lexer<token_data>(_EOF_action, _state_table, _actions, _lexer_states)
+cython_lexer::cython_lexer(string _lang_vers, lex_func_t _EOF_action, shared_ptr< vector< shared_ptr<csu::DFA_state> > > _state_table,
+                shared_ptr< vector< lex_func_t > > _actions, shared_ptr< vector< unsigned int> > _lexer_states) :
+lexer<token_data>(_lang_vers, _EOF_action, _state_table, _actions, _lexer_states)
 {
     block_lengths.push_back(1);
     expecting_block = false;

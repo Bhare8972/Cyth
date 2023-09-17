@@ -544,7 +544,7 @@ public:
             }
         }
 
-        return std::make_shared< lexer<return_type> >(EOF_action, state_table, actions, lexer_states);
+        return std::make_shared< lexer<return_type> >(language_version, EOF_action, state_table, actions, lexer_states);
     }
 
     template<class lexertype>

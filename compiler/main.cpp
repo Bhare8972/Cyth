@@ -46,8 +46,6 @@ using namespace std;
 
 /// GENERAL FIXES ///
 
-// SOMEHOW need to check to make sure previous lexar/parser tabels are valid with current rules.
-
 // fix lexor to use quotations. Fix for strings
 
 // improve C variable naming
@@ -120,11 +118,14 @@ using namespace std;
 
 /// current work plan ///
 
-// Need to print to screen when building the language
 
-// working on and/or needs testing
+// booling logical operators:
+// shortcircuiting
+currently trying to find a bug in c-rwring. am at source_function_visitor::methodDef_up
+// want xor
 
 // THEN implmenting tests if grammer changes.
+// impliment printing to screen when building the language (so it doesn't sit silent for long periods of time)
 
 
 

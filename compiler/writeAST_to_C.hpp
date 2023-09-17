@@ -91,6 +91,8 @@ class source_expression_visitor : public AST_visitorTree
 private:
     void append_childExp_to_finalExp(); // this loops over all child expressions, and adds their final_expression to this final_expresson
 
+    bool do_children; // true vast majority of time
+
 public:
 
     Csource_out_ptr source_fout;
@@ -106,6 +108,9 @@ public:
         //append_childernExp_to_thisExp = true; I don't know what this is.
     }
 
+    bool apply_to_children() override
+        { return do_children; }
+
     std::shared_ptr< AST_visitor_base > make_child(int number) override;
 
 
@@ -117,7 +122,8 @@ public:
 
     void binOperator_up(binOperator_expression_AST_node* binOprExp, AST_visitor_base* LHS_exp_visitor, AST_visitor_base* RHS_exp_visitor) override;
 
-    void binBoolOperator_up(binBoolOp_expression_AST_node* binBoolOprExp, AST_visitor_base* LHS_exp_visitor, AST_visitor_base* RHS_exp_visitor) override;
+    void binBoolOperator_down(binBoolOp_expression_AST_node* binBoolOprExp) override;
+      // needs to be down, becouse childeren are handeld
 
     void varReferance_up(varReferance_expression_AST_node* varRefExp) override;
 

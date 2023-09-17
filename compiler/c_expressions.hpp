@@ -27,12 +27,10 @@ This file defines C-expressions and how they write to file and cleanup
 #include "UTF8.hpp"
 #include "c_source_writer.hpp"
 
-//TODO: require and check get_C_expression is called exactly once??
 //TODO: has a location?
+//TODO: get_C_expression should error if called more than once??
 
 class varType; // you will learn these horrors elsewhere. For now, be content you only know their name.
-
-// make a more generallized expression that doesn't have a C representation!. It throws error if you call get_C_expression
 
 class C_expression
 {
@@ -44,7 +42,10 @@ public:
     // this seems to combine two concepts: if this exp can be the RHS of a C copy (=) and if this expression requires a destructor
     // it is current undefined what to do if these two concepts are not both false or both true.
     //    best to avoid this situation
+
+
     // write cleanup will write a error if can_be_referenced is true but has_output_ownership is false
+          // on later inspection:  This is not true!!
 
     bool can_be_referenced;
 
@@ -53,7 +54,7 @@ public:
     virtual csu::utf8_string get_C_expression()=0; // this may be called multiple times
     virtual void cleanup_this( Csource_out_ptr source_fout ){} // overwrite this to define how expression is cleaned-up
 
-    void write_cleanup( Csource_out_ptr source_fout );  // this is called once, after which get_C_expression is not valid
+    void write_cleanup( Csource_out_ptr source_fout );  // this is called once, after which get_C_expression is not valid. This validity is not checked anywhere
     void add_cleanup_child( std::shared_ptr<C_expression> child );
 };
 typedef std::shared_ptr<C_expression> C_expression_ptr;

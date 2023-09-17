@@ -3001,8 +3001,7 @@ void build_types::binBoolOperator_up(binBoolOp_expression_AST_node* binBoolOprEx
         bool checkOrder = false;
         auto boolType = binBoolOprExp->symbol_table->get_type_global(boolName, binBoolOprExp->loc, checkOrder);
 
-        cout << "TESTING build_types::binBoolOperator_up " << LHS_type->definition_name << endl;
-        if(  (not LHS_type->is_equivalent( boolType )) or (not LHS_type->can_implicit_castTo(boolType)) )
+        if(  not ( LHS_type->is_equivalent( boolType ) or LHS_type->can_implicit_castTo(boolType) ) )
         {
             binBoolOprExp->verification_state = 0;
             cout << "LHS-type " << LHS_type->definition_name << " cannot be converted to bool at " << binBoolOprExp->loc << endl;
@@ -3011,7 +3010,7 @@ void build_types::binBoolOperator_up(binBoolOp_expression_AST_node* binBoolOprEx
             return;
         }
 
-        if(  (not RHS_type->is_equivalent( boolType )) or (not RHS_type->can_implicit_castTo(boolType)) )
+        if(  not (RHS_type->is_equivalent( boolType ) or RHS_type->can_implicit_castTo(boolType)) )
         {
             binBoolOprExp->verification_state = 0;
             cout << "RHS-type " << RHS_type->definition_name << " cannot be converted to bool at " << binBoolOprExp->loc << endl;

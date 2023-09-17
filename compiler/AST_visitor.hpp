@@ -307,35 +307,9 @@ public:
 
 
     //// redefine the UP, becouse previous definition is unnecsary
-    // technically I'd like to do this, but it is not a pain and not necisary.
+    // the child-visitors are just this object again
+         // technically I'd like to do this, but it is not a pain and not necisary.
 
-//    virtual void module_up(module_AST_node* module){}
-//
-//    virtual void expressionStatement_up(expression_statement_AST_node* expStmt){}
-//    virtual void definitionStmt_up(definition_statement_AST_node* defStmt){}
-//
-//    virtual void binOperator_up(binOperator_expression_AST_node* binOprExp){}
-//
-//
-//    // implement them
-//    void module_up(module_AST_node* module, std::list<AST_visitor_base*>& visitor_children)
-//    {
-//        module_up(module);
-//    }
-//
-//    void expressionStatement_up(expression_statement_AST_node* expStmt, AST_visitor_base* expression_child)
-//    {
-//        expressionStatement_up(expStmt);
-//    }
-//    void definitionStmt_up(definition_statement_AST_node* defStmt, AST_visitor_base* varTypeRepr_child)
-//    {
-//        definitionStmt_up(defStmt);
-//    }
-//
-//    void binOperator_up(binOperator_expression_AST_node* binOprExp, AST_visitor_base* LHS_exp_visitor, AST_visitor_base* RHS_exp_visitor)
-//    {
-//        binOperator_up(binOprExp);
-//    }
 };
 
 // if a visitor only visits the thing it is called on, which no chillins

@@ -584,7 +584,7 @@ public:
     parser(std::string _lang_version, std::shared_ptr<lexer<token_data> > _lex, std::shared_ptr< std::map<unsigned int, utf8_string> > _term_map,
            std::shared_ptr< std::vector<production_info_ptr> > _production_information, std::shared_ptr< std::vector<parser_state> > _state_table);
 
-    std::string get_language_version()
+    std::string get_language_version();
 
     std::shared_ptr<parser> copy();
     dyn_holder parse(bool reporting=false);
