@@ -21,7 +21,7 @@ using namespace csu;
 using namespace std;
 
 
-AST_visitorTree::AST_visitorTree()
+AST_visitorTree::AST_visitorTree() : AST_visitor_base()
 {
     parent = 0;
     children_initiated = false;

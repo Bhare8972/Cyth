@@ -105,6 +105,7 @@ public:
     source_expression_visitor(Csource_out_ptr _source_fout) :
         source_fout(_source_fout)
     {
+        do_children = true;
         //append_childernExp_to_thisExp = true; I don't know what this is.
     }
 

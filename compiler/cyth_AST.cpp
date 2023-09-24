@@ -38,6 +38,7 @@ AST_node::AST_node()
 
 void AST_node::apply_visitor(AST_visitor_base* visitor)
 {
+
     try
     {
         apply_visitor_inner( visitor );
@@ -47,6 +48,7 @@ void AST_node::apply_visitor(AST_visitor_base* visitor)
         cout << "exception in visitor to " << AST_node_name() << " at " << loc << endl;
         throw;
     }
+
 }
 
 void AST_node::apply_visitor_inner(AST_visitor_base* visitor)
@@ -1189,7 +1191,6 @@ void if_AST_node::apply_visitor_inner(AST_visitor_base* visitor)
         child_conditional->apply_visitor( childCond_visit );
     }
 
-
     visitor->ifCond_up( this, ifExp_child, ifBlock_child, childCond_visit );
     visitor->activeCond_up( this, ifExp_child, ifBlock_child, childCond_visit  );
     visitor->conditional_up( this, ifBlock_child );
@@ -1793,6 +1794,7 @@ accessor_expression_AST_node::accessor_expression_AST_node(expression_AST_ptr _e
 
 void accessor_expression_AST_node::apply_visitor_inner(AST_visitor_base* visitor)
 {
+
     visitor->accessorExp_down( this );
     visitor->expression_down( this );
     visitor->ASTnode_down( this );
@@ -1801,7 +1803,9 @@ void accessor_expression_AST_node::apply_visitor_inner(AST_visitor_base* visitor
 
     visitor->initiate_children( 1 );
     AST_visitor_base* EXP_child = visitor->get_child(0);
+
     expression->apply_visitor( EXP_child );
+
 
     visitor->accessorExp_up( this, EXP_child );
     visitor->expression_up( this );

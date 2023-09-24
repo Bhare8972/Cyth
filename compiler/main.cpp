@@ -115,14 +115,12 @@ using namespace std;
 // self-pointer should actually be a struct that includes self-pointer, as well as a reference-block (like a shared-ptr that exists to say if memory is alive or not). This reference block is made when the memory-controlled variable is made (static, or var-variable is malloced)
     //  this reference block is passed to all members of a class. Thus, everyone can have a shared-ptr that says if they are alive or not, essentially allowing safty-references.
 
+// vistors base-class should have a public boolean member, named debug, default to false. If it is true, teh AST will print on calling up/down
 
 /// current work plan ///
 
 
-// booling logical operators:
-// shortcircuiting
-currently trying to find a bug in c-rwring. am at source_function_visitor::methodDef_up
-// want xor
+
 
 // THEN implmenting tests if grammer changes.
 // impliment printing to screen when building the language (so it doesn't sit silent for long periods of time)
@@ -133,7 +131,7 @@ currently trying to find a bug in c-rwring. am at source_function_visitor::metho
  // unary, and in-place operators
  // float, double
  // __call__ operator
-
+// want xor?
 
 
 

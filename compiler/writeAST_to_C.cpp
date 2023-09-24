@@ -608,9 +608,7 @@ void source_LHSreference_visitor::LHS_accessor_down(LHS_accessor_AST_node* LHSac
     parent_expressionAST->apply_visitor( &parent_visitor );
     auto parent_C_code = parent_visitor.final_expression;
 
-
     parent_type->write_member_setter(parent_C_code, member_name, RHS_exp, source_fout);
-
 
     parent_C_code->write_cleanup( source_fout );
 }
@@ -699,6 +697,7 @@ void source_expression_visitor::append_childExp_to_finalExp()
 
 void source_expression_visitor::intLiteral_up(intLiteral_expression_AST_node* intLitExp)
 {
+
     if( intLitExp->expression_return_type->definition_name == "UNNAMED_C_TYPE" )
     {
         stringstream exp;
@@ -733,6 +732,7 @@ void source_expression_visitor::intLiteral_up(intLiteral_expression_AST_node* in
 
 void source_expression_visitor::binOperator_up(binOperator_expression_AST_node* binOprExp, AST_visitor_base* LHS_exp_visitor, AST_visitor_base* RHS_exp_visitor)
 {
+
     source_expression_visitor* LHS_visitor = dynamic_cast<source_expression_visitor*>(LHS_exp_visitor);
     source_expression_visitor* RHS_visitor = dynamic_cast<source_expression_visitor*>(RHS_exp_visitor);
 
@@ -906,7 +906,7 @@ default:
 
 void source_expression_visitor::binBoolOperator_down(binBoolOp_expression_AST_node* binBoolOprExp)
 {
-cout<<'a'<<endl;
+
     do_children = false;  // we need to do something weird to allow for short circuiting
 
 
@@ -1072,7 +1072,6 @@ cout<<'a'<<endl;
 
     LHS_cExp->write_cleanup( source_fout );
 
-cout<<'b'<<endl;
 }
 
 void source_expression_visitor::varReferance_up(varReferance_expression_AST_node* varRefExp)
@@ -1090,12 +1089,15 @@ void source_expression_visitor::ParenExpGrouping_up(ParenGrouped_expression_AST_
     //parenGroupExp->c_exp_can_be_referenced = parenGroupExp->expression->c_exp_can_be_referenced;
 }
 
+
+
 void source_expression_visitor::accessorExp_up(accessor_expression_AST_node* accessorExp, AST_visitor_base* expChild_visitor)
 {
     auto parentType = accessorExp->expression->expression_return_type;
 
     source_expression_visitor* EXP_visitor_PTR = dynamic_cast<source_expression_visitor*>(expChild_visitor);
     auto parent_C_exp = EXP_visitor_PTR->final_expression;
+
 
     //auto child_exp = accessorExp->expression->writer->get_C_expression();
     final_expression = parentType->write_member_getter(parent_C_exp, accessorExp->name, source_fout);
@@ -1639,6 +1641,7 @@ void source_statement_visitor::definitionNconstruction_up(definitionNconstructio
 void source_statement_visitor::definitionNassignment_up(definitionNassignment_statement_AST_node* defStmt,
                                     AST_visitor_base* varTypeRepr_child, AST_visitor_base* exp_child)
 {
+
     if( write_definitions )
     {
         defStmt->var_type->resolved_type->C_definition_name( defStmt->variable_symbol->C_name, source_fout );
@@ -1676,6 +1679,7 @@ void source_statement_visitor::definitionNassignment_up(definitionNassignment_st
     // cleanup
     variable_LHS_expression->write_cleanup( source_fout );
     RHS_c_exp->write_cleanup( source_fout );
+
 }
 
 
@@ -2217,8 +2221,6 @@ public:
     void methodDef_up(method_AST_node* methodDef, AST_visitor_base* returnType_child, AST_visitor_base* paramList_child,
                               AST_visitor_base* methodBody_child)
     {
-
-cout<<"YOU"<<endl;
         auto self_var = methodDef->funcType->self_ptr_name;
 
         methodDef->specific_overload->write_C_prototype( source_fout );
@@ -2393,13 +2395,9 @@ cout<<"YOU"<<endl;
             }
         }
 
-cout<<"the snurg needs its blurg"<<endl;
-
-
         // write block of statements
         source_statement_visitor statement_writer( source_fout );
         methodDef->block_AST->apply_visitor( &statement_writer );
-
 
 // TODO: destruct local variables??
 
@@ -2427,7 +2425,6 @@ cout<<"the snurg needs its blurg"<<endl;
 
         source_fout->leave_scope();
         source_fout->out_strm() << source_fout->ln_strt << "}" << endl << endl;
-cout<<"ME"<<endl;
     }
 
 

@@ -45,7 +45,10 @@ class AST_visitor_base
 public:
 
     AST_visitor_base(){}
+
     virtual ~AST_visitor_base(){}
+
+    virtual std::string name(){ return "no_name"; }
 
     int number_children;
 

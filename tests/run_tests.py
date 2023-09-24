@@ -26,6 +26,7 @@ if __name__ == "__main__":
     parser.add_argument( "--out", action="store", required=True, help="location where to output tests" )
     parser.add_argument( "--lib", action="store", required=True, help="location of the cyth library to use" )
     parser.add_argument( "--test", action="append", choices=tests, help="specific test to run (can be multiple), is optional" )
+    parser.add_argument( "--gdb", action='store_true', help="use gdb when running compiler. needs one test to be specified." )
     args = parser.parse_args()
 
     cyth_command = args.cyth
@@ -37,7 +38,13 @@ if __name__ == "__main__":
     to_run = tests
     if args.test is not None:
         to_run = args.test
-        
+
+    use_gdb = args.gdb and (len(to_run)==1)
+    if  args.gdb and (not len(to_run)==1):
+        print('can only use gdb if one text selected')
+
+
+    all_true = True
     for running_tst in to_run:
         test_dir = out_directory + "/" + running_tst
         working_test_dir = test_dir + "/tmp"
@@ -46,8 +53,11 @@ if __name__ == "__main__":
             mkdir(test_dir)
         if not path.exists( working_test_dir ):
             mkdir(working_test_dir)
-            
+
         command = [ cyth_command, "-l "+cyth_lib, "-i "+test_directory+'/'+running_tst+"/test.cy", "--out_loc "+test_dir,  "--inter_loc "+working_test_dir]
+        if use_gdb:
+            command = ['gdb', '--args'] + command
+
         print( "running test:", running_tst  )
         print("   cyth cmd:", ' '.join(command))
         
@@ -60,6 +70,7 @@ if __name__ == "__main__":
             print( e)
             # if out:
                 # print('out:', out)
+            all_true =False
             continue
 
 
@@ -86,6 +97,8 @@ if __name__ == "__main__":
             # print("stderr:")
             # print( out.stderr )
             print(":\n")
+
+            all_true =False
             continue
         
         run_command = test_dir + "/test.cy.out"
@@ -97,6 +110,8 @@ if __name__ == "__main__":
         expected_text = open( test_directory+'/'+running_tst+"/OUT" ).read()
         
         if expected_text !=  out.stdout:
+
+            all_true =False
             print("ERROR! test failed given output:")
             print()
             print('~'+out.stdout+'~')
@@ -123,4 +138,9 @@ if __name__ == "__main__":
         else:
             print("  test succsesful!")
             print()
+
+    if  all_true:
+        print('all tests succsesful!')
+    else:
+        print('a test failed!')
         
